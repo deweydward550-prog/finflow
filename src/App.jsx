@@ -87,9 +87,26 @@ export default function App() {
       const recurring = await db.recurringExpenses.toArray();
       const payments = await db.recurringPayments.toArray();
 
+      // Clean orphaned payments whose transaction was deleted
+      const txIdSet = new Set(txs.map(t => t.id));
+      const orphanedPaymentIds = [];
+      const validPayments = [];
+
+      for (const p of payments) {
+        if (p.transactionId && !txIdSet.has(p.transactionId)) {
+          orphanedPaymentIds.push(p.id);
+        } else {
+          validPayments.push(p);
+        }
+      }
+
+      if (orphanedPaymentIds.length > 0) {
+        await db.recurringPayments.bulkDelete(orphanedPaymentIds);
+      }
+
       setAllTransactions(txs);
       setRecurringList(recurring);
-      setRecurringPayments(payments);
+      setRecurringPayments(validPayments);
     } catch (err) {
       console.error('Failed to load database:', err);
     } finally {
@@ -108,16 +125,20 @@ export default function App() {
       .sort((a, b) => b.date.localeCompare(a.date) || (b.time || '').localeCompare(a.time || ''));
   }, [allTransactions, selectedMonthYear]);
 
-  // Map of recurring payments
+  // Map of recurring payments (only valid if linked transaction exists)
   const currentMonthPaymentsMap = useMemo(() => {
     const map = {};
+    const txIdSet = new Set(allTransactions.map(t => t.id));
+
     recurringPayments
       .filter(p => p.monthYear === selectedMonthYear)
       .forEach(p => {
-        map[p.recurringId] = p;
+        if (!p.transactionId || txIdSet.has(p.transactionId)) {
+          map[p.recurringId] = p;
+        }
       });
     return map;
-  }, [recurringPayments, selectedMonthYear]);
+  }, [recurringPayments, selectedMonthYear, allTransactions]);
 
   // Summary Metrics
   const { totalIncome, totalExpense, netBalance } = useMemo(() => {
@@ -231,6 +252,15 @@ export default function App() {
     try {
       if (type === 'transaction') {
         await db.transactions.delete(item.id);
+        if (item.recurringId) {
+          const monthYear = item.date ? item.date.substring(0, 7) : selectedMonthYear;
+          await db.recurringPayments
+            .where('recurringId')
+            .equals(Number(item.recurringId))
+            .and(p => p.monthYear === monthYear)
+            .delete();
+        }
+        await db.recurringPayments.where('transactionId').equals(item.id).delete();
         showToast('Transaksi berhasil dihapus', 'info');
       } else if (type === 'recurring') {
         await db.recurringExpenses.delete(item.id);
