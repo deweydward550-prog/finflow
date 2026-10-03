@@ -158,14 +158,7 @@ export default function MonthlyQuests({
                 onClick={onOpenNewRecurring}
               >
                 <Plus size={14} strokeWidth={2.5} />
-                <span>+ Tambah Tagihan Rutin Sekarang</span>
-              </button>
-              <button 
-                type="button"
-                className="zen-filter-btn" 
-                onClick={onOpenManageRecurring}
-              >
-                Kelola Daftar Tagihan
+                <span>Tambah Tagihan Rutin</span>
               </button>
             </div>
           </div>
