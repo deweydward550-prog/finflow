@@ -12,6 +12,7 @@ import SettingsModal from './components/SettingsModal';
 import ConfirmDialog from './components/ConfirmDialog';
 import Toast from './components/Toast';
 import { pushDatabaseToTelegram, getTelegramConfig } from './services/telegramDb';
+import { initWhatsAppSync } from './services/whatsappSync';
 import './App.css';
 
 export default function App() {
@@ -52,6 +53,17 @@ export default function App() {
       setToast(null);
     }, 4000);
   }, []);
+
+  // Real-time WhatsApp Bot Sync Listener
+  useEffect(() => {
+    const cleanup = initWhatsAppSync({
+      onNewTransactions: (items) => {
+        loadData();
+        showToast(`💬 ${items.length} transaksi baru berhasil diinput dari WhatsApp!`, 'success');
+      }
+    });
+    return cleanup;
+  }, [showToast]);
 
   // Handle URL shortcut parameters from PWA
   useEffect(() => {

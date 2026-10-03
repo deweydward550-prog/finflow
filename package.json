@@ -5,14 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "bot": "node server/bot.js",
+    "server": "node server/bot.js",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
     "canvas-confetti": "^1.9.4",
+    "cors": "^2.8.6",
     "dexie": "^4.4.6",
+    "express": "^5.2.1",
     "lucide-react": "^1.51.0",
+    "pino": "^10.4.0",
+    "qrcode-terminal": "^0.12.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

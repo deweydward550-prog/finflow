@@ -1618,6 +1618,11 @@
   color: #3B82F6;
 }
 
+.icon-wa-green {
+  background: rgba(37, 211, 102, 0.14);
+  color: #25D366;
+}
+
 .icon-wallet-green {
   background: rgba(16, 185, 129, 0.12);
   color: #10B981;
@@ -1626,6 +1631,131 @@
 .icon-data-purple {
   background: rgba(139, 92, 246, 0.12);
   color: #8B5CF6;
+}
+
+/* WhatsApp Sub-Menu Styles */
+.wa-cmd-box {
+  background: var(--bg-main);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.wa-cmd-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.725rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.wa-cmd-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-hover);
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius-sm);
+}
+
+.wa-cmd-code-row code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #25D366;
+}
+
+.btn-copy-cmd {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.675rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--bg-main);
+  padding: 0.2rem 0.45rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-hairline);
+  transition: all var(--transition);
+}
+.btn-copy-cmd:hover {
+  background: var(--border-subtle);
+  color: var(--text-main);
+}
+
+.wa-guide-card {
+  background: var(--bg-main);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.wa-guide-title {
+  font-size: 0.725rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.wa-examples-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.wa-example-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: var(--bg-hover);
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius-sm);
+}
+
+.wa-ex-badge {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.wa-example-item code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--text-main);
+}
+
+.wa-simulator-box {
+  background: var(--bg-main);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.wa-simulator-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.wa-simulator-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.wa-sim-btn {
+  align-self: flex-end;
 }
 
 .settings-menu-info {

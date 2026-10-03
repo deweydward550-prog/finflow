@@ -4,7 +4,8 @@ import {
   ShieldCheck, HardDrive, Check, AlertTriangle, Sparkles, 
   Send, Bot, Cloud, CheckCircle2, AlertCircle, HelpCircle,
   ExternalLink, Eye, EyeOff, CreditCard, ChevronRight, ChevronLeft,
-  Plus, Edit2, Trash2, Banknote, Smartphone, Wallet, Star
+  Plus, Edit2, Trash2, Banknote, Smartphone, Wallet, Star,
+  MessageCircle, Terminal, Copy, Zap
 } from 'lucide-react';
 import { 
   getTelegramConfig, saveTelegramConfig, testTelegramConnection, 
@@ -15,6 +16,7 @@ import {
   clearAllDatabaseData, getCustomPaymentMethods, saveCustomPaymentMethods,
   setPrimaryPaymentMethod, DEFAULT_PAYMENT_METHODS
 } from '../db/db';
+import { testSendManualChat } from '../services/whatsappSync';
 
 export default function SettingsModal({
   isOpen,
@@ -24,7 +26,7 @@ export default function SettingsModal({
 }) {
   if (!isOpen) return null;
 
-  // Navigation View: 'main' | 'connection' | 'payment_methods' | 'data'
+  // Navigation View: 'main' | 'connection' | 'payment_methods' | 'whatsapp_bot' | 'data'
   const [currentView, setCurrentView] = useState('main');
 
   const [loading, setLoading] = useState(false);
@@ -40,6 +42,11 @@ export default function SettingsModal({
   const [lastSynced, setLastSynced] = useState(null);
   const [showToken, setShowToken] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+
+  // WhatsApp Bot State
+  const [waServerStatus, setWaServerStatus] = useState({ ok: false, status: 'checking' });
+  const [testChatText, setTestChatText] = useState('naspad 13000 / bensin 20.000 / cukur 25k');
+  const [isSendingTestChat, setIsSendingTestChat] = useState(false);
 
   // Payment Methods State
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -62,7 +69,33 @@ export default function SettingsModal({
     setLastSynced(config.lastSynced || null);
 
     setPaymentMethods(getCustomPaymentMethods());
+
+    // Check WhatsApp Server Status
+    fetch('http://localhost:5051/api/status')
+      .then(r => r.json())
+      .then(d => setWaServerStatus(d))
+      .catch(() => setWaServerStatus({ ok: false, status: 'offline' }));
   }, [isOpen]);
+
+  // Test WhatsApp Chat Input
+  const handleTestSendChat = async (e) => {
+    e.preventDefault();
+    if (!testChatText.trim()) return;
+    try {
+      setIsSendingTestChat(true);
+      const res = await testSendManualChat(testChatText.trim());
+      if (res.ok && res.parsed?.length > 0) {
+        showToast(`✅ ${res.parsed.length} transaksi berhasil diinput via WhatsApp Simulator!`, 'success');
+        await onDataChanged();
+      } else {
+        showToast('Gagal memproses pesan chat: format tidak valid', 'error');
+      }
+    } catch (err) {
+      showToast('Gagal terhubung ke Bot Server: Pastikan server aktif (npm run bot)', 'error');
+    } finally {
+      setIsSendingTestChat(false);
+    }
+  };
 
   // Save Telegram config
   const handleSaveConfig = () => {
@@ -327,6 +360,8 @@ export default function SettingsModal({
     switch (currentView) {
       case 'connection':
         return 'Atur Koneksi Telegram';
+      case 'whatsapp_bot':
+        return 'WhatsApp Bot Server (Input Chat)';
       case 'payment_methods':
         return 'Metode Pembayaran / Rekening';
       case 'data':
@@ -369,7 +404,7 @@ export default function SettingsModal({
               ========================================================= */}
           {currentView === 'main' && (
             <div className="settings-vertical-menu">
-              {/* Row 1: Atur Koneksi */}
+              {/* Row 1: Atur Koneksi Telegram */}
               <button 
                 type="button" 
                 className="settings-menu-item-row"
@@ -393,7 +428,31 @@ export default function SettingsModal({
                 </div>
               </button>
 
-              {/* Row 2: Atur Metode Pembayaran / Rekening */}
+              {/* Row 2: WhatsApp Bot Server (Auto-Input Chat) */}
+              <button 
+                type="button" 
+                className="settings-menu-item-row"
+                onClick={() => setCurrentView('whatsapp_bot')}
+              >
+                <div className="settings-menu-left">
+                  <div className="settings-menu-icon-box icon-wa-green">
+                    <MessageCircle size={18} />
+                  </div>
+                  <div className="settings-menu-info">
+                    <span className="settings-menu-title">WhatsApp Bot Server</span>
+                    <span className="settings-menu-desc">Pencatatan pengeluaran otomatis via chat WhatsApp (Multi-item)</span>
+                  </div>
+                </div>
+
+                <div className="settings-menu-right">
+                  <span className={`badge ${waServerStatus.status === 'connected' ? 'badge-success' : waServerStatus.status === 'qr' ? 'badge-warning' : 'badge-neutral'}`}>
+                    {waServerStatus.status === 'connected' ? '🟢 Bot Aktif' : waServerStatus.status === 'qr' ? '🟡 Scan QR' : 'npm run bot'}
+                  </span>
+                  <ChevronRight size={16} className="text-muted" />
+                </div>
+              </button>
+
+              {/* Row 3: Atur Metode Pembayaran / Rekening */}
               <button 
                 type="button" 
                 className="settings-menu-item-row"
@@ -417,7 +476,7 @@ export default function SettingsModal({
                 </div>
               </button>
 
-              {/* Row 3: Cadangan & Reset Data */}
+              {/* Row 4: Cadangan & Reset Data */}
               <button 
                 type="button" 
                 className="settings-menu-item-row"
@@ -591,14 +650,100 @@ export default function SettingsModal({
                         Buka bot yang baru dibuat, lalu tekan tombol <strong>Start</strong>.
                       </li>
                       <li>
-                        Untuk mengetahui <strong>Chat ID</strong>-mu, kirim pesan ke <strong>@userinfobot</strong> di Telegram, lalu salin angka <code>Id</code> ke kolom <em>Chat ID</em> di atas.
-                      </li>
-                      <li>
-                        Klik tombol <strong>"Tes Koneksi"</strong> dan <strong>"Simpan ke Telegram"</strong>. Selesai! 🎉
+                        Selesai! Sekarang kamu bisa mencadangkan & memulihkan data langsung via Telegram.
                       </li>
                     </ol>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* =========================================================
+              2. SUB-MENU: WHATSAPP BOT SERVER
+              ========================================================= */}
+          {currentView === 'whatsapp_bot' && (
+            <div className="settings-section tg-database-section">
+              <div className="tg-section-header">
+                <div className="tg-title-wrap">
+                  <MessageCircle size={18} className="text-inc" />
+                  <h4 className="settings-section-title">WhatsApp Bot Server (Lokal)</h4>
+                </div>
+
+                <span className={`badge ${waServerStatus.status === 'connected' ? 'badge-success' : waServerStatus.status === 'qr' ? 'badge-warning' : 'badge-neutral'}`}>
+                  {waServerStatus.status === 'connected' ? '🟢 Bot Aktif' : waServerStatus.status === 'qr' ? '🟡 Menunggu Scan QR' : '⚪ Server Offline'}
+                </span>
+              </div>
+
+              <p className="text-muted text-xs">
+                Catat pengeluaran cukup dengan mengirim chat ke WhatsApp Anda sendiri atau bot. Server berjalan di komputer lokal Anda (Port 5051).
+              </p>
+
+              {/* Command Box to Run Server */}
+              <div className="wa-cmd-box">
+                <div className="wa-cmd-label">
+                  <Terminal size={13} className="text-muted" />
+                  <span>Perintah Menjalankan Bot Server di Terminal:</span>
+                </div>
+                <div className="wa-cmd-code-row">
+                  <code>npm run bot</code>
+                  <button 
+                    type="button" 
+                    className="btn-copy-cmd" 
+                    onClick={() => {
+                      navigator.clipboard.writeText('npm run bot');
+                      showToast('Perintah "npm run bot" disalin ke clipboard!', 'info');
+                    }}
+                    title="Salin Perintah"
+                  >
+                    <Copy size={12} />
+                    <span>Salin</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Format Examples Card */}
+              <div className="wa-guide-card">
+                <span className="wa-guide-title">Contoh Format Chat yang Didukung:</span>
+                <div className="wa-examples-list">
+                  <div className="wa-example-item">
+                    <span className="wa-ex-badge">Multi-Item (Garis Miring /)</span>
+                    <code>naspad 13000 / bensin 20.000 / cukur 25k</code>
+                  </div>
+                  <div className="wa-example-item">
+                    <span className="wa-ex-badge">Koma (,) atau Baris Baru</span>
+                    <code>kopi 18rb, makan siang 25k, parkir 2000</code>
+                  </div>
+                  <div className="wa-example-item">
+                    <span className="wa-ex-badge">Singkatan Nominal (k, rb, jt)</span>
+                    <code>25k cukur, 50rb bensin, 1.5jt sewa kost</code>
+                  </div>
+                </div>
+              </div>
+
+              {/* Interactive Live Test Simulator */}
+              <div className="wa-simulator-box">
+                <div className="wa-simulator-header">
+                  <Zap size={14} className="text-warn" />
+                  <span className="text-xs font-bold">Simulator Uji Coba Chat (Langsung Input ke FinFlow):</span>
+                </div>
+
+                <form onSubmit={handleTestSendChat} className="wa-simulator-form">
+                  <input 
+                    type="text"
+                    className="input-control font-mono text-xs"
+                    value={testChatText}
+                    onChange={(e) => setTestChatText(e.target.value)}
+                    placeholder="naspad 13000 / bensin 20.000 / cukur 25k"
+                  />
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary btn-sm wa-sim-btn"
+                    disabled={isSendingTestChat || !testChatText.trim()}
+                  >
+                    {isSendingTestChat ? 'Memproses...' : 'Kirim & Catat ke FinFlow'}
+                  </button>
+                </form>
               </div>
             </div>
           )}
