@@ -30,16 +30,10 @@ export const DEFAULT_CATEGORIES = [
 ];
 
 export const DEFAULT_PAYMENT_METHODS = [
-  { id: 'cash', name: 'Tunai (Cash)', icon: 'Banknote', color: '#10B981' },
-  { id: 'bca', name: 'BCA', icon: 'CreditCard', color: '#0060AF' },
-  { id: 'mandiri', name: 'Mandiri', icon: 'CreditCard', color: '#003366' },
-  { id: 'bri', name: 'BRI', icon: 'CreditCard', color: '#00529B' },
-  { id: 'bni', name: 'BNI', icon: 'CreditCard', color: '#F15A24' },
-  { id: 'jago', name: 'Bank Jago', icon: 'CreditCard', color: '#9B51E0' },
-  { id: 'gopay', name: 'GoPay', icon: 'Smartphone', color: '#00AA13' },
-  { id: 'ovo', name: 'OVO', icon: 'Smartphone', color: '#4C3494' },
-  { id: 'dana', name: 'DANA', icon: 'Smartphone', color: '#118EEA' },
-  { id: 'shopeepay', name: 'ShopeePay', icon: 'Smartphone', color: '#EE4D2D' },
+  { id: 'bca', name: 'BCA', icon: 'CreditCard', color: '#0060AF', isPrimary: true },
+  { id: 'bni', name: 'BNI', icon: 'CreditCard', color: '#F15A24', isPrimary: false },
+  { id: 'seabank', name: 'SeaBank', icon: 'CreditCard', color: '#0060AF', isPrimary: false },
+  { id: 'bsi', name: 'BSI', icon: 'CreditCard', color: '#0060AF', isPrimary: false },
 ];
 
 export function getCustomPaymentMethods() {
@@ -47,7 +41,15 @@ export function getCustomPaymentMethods() {
     const raw = localStorage.getItem('finflow_payment_methods');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Ensure at least one account is marked isPrimary
+        const hasPrimary = parsed.some(m => m.isPrimary);
+        if (!hasPrimary) {
+          parsed[0].isPrimary = true;
+          localStorage.setItem('finflow_payment_methods', JSON.stringify(parsed));
+        }
+        return parsed;
+      }
     }
   } catch (e) {
     console.error('Error reading payment methods:', e);
@@ -56,8 +58,28 @@ export function getCustomPaymentMethods() {
 }
 
 export function saveCustomPaymentMethods(methods) {
-  localStorage.setItem('finflow_payment_methods', JSON.stringify(methods));
-  window.dispatchEvent(new CustomEvent('finflow_payment_methods_updated', { detail: methods }));
+  // Ensure at least one method is primary
+  let list = [...methods];
+  if (!list.some(m => m.isPrimary) && list.length > 0) {
+    list[0] = { ...list[0], isPrimary: true };
+  }
+  localStorage.setItem('finflow_payment_methods', JSON.stringify(list));
+  window.dispatchEvent(new CustomEvent('finflow_payment_methods_updated', { detail: list }));
+}
+
+export function getPrimaryPaymentMethod() {
+  const methods = getCustomPaymentMethods();
+  return methods.find(m => m.isPrimary) || methods[0] || null;
+}
+
+export function setPrimaryPaymentMethod(id) {
+  const methods = getCustomPaymentMethods();
+  const updated = methods.map(m => ({
+    ...m,
+    isPrimary: m.id === id
+  }));
+  saveCustomPaymentMethods(updated);
+  return updated;
 }
 
 export const PAYMENT_METHODS = getCustomPaymentMethods();

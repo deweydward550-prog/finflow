@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, Plus, Check, Calendar, Clock, CreditCard, Tag, 
-  AlignLeft, ArrowDownCircle, ArrowUpCircle, Sparkles, Banknote, Smartphone
+  AlignLeft, ArrowDownCircle, ArrowUpCircle, Sparkles, Banknote, Smartphone, Star
 } from 'lucide-react';
-import { DEFAULT_CATEGORIES, getCustomPaymentMethods } from '../db/db';
+import { DEFAULT_CATEGORIES, getCustomPaymentMethods, getPrimaryPaymentMethod } from '../db/db';
 import { getCategoryIcon, formatRupiah, formatAmountInput, parseAmountInput } from '../utils/formatters';
 
 export default function TransactionModal({
@@ -19,7 +19,7 @@ export default function TransactionModal({
   const [amount, setAmount] = useState('');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('Tunai (Cash)');
+  const [paymentMethod, setPaymentMethod] = useState(() => getPrimaryPaymentMethod()?.name || 'BCA');
   const [paymentMethodsList, setPaymentMethodsList] = useState(getCustomPaymentMethods());
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -29,24 +29,29 @@ export default function TransactionModal({
   // Listen to payment methods updates
   useEffect(() => {
     const handleUpdate = () => {
-      setPaymentMethodsList(getCustomPaymentMethods());
+      const methods = getCustomPaymentMethods();
+      setPaymentMethodsList(methods);
+      const primary = getPrimaryPaymentMethod();
+      if (!initialData && primary) {
+        setPaymentMethod(primary.name);
+      }
     };
     window.addEventListener('finflow_payment_methods_updated', handleUpdate);
     return () => window.removeEventListener('finflow_payment_methods_updated', handleUpdate);
-  }, []);
+  }, [initialData]);
 
   // Initial load or edit
   useEffect(() => {
     const methods = getCustomPaymentMethods();
     setPaymentMethodsList(methods);
-    const defaultMethod = methods[0]?.name || 'Tunai (Cash)';
+    const primaryMethod = getPrimaryPaymentMethod()?.name || methods[0]?.name || 'BCA';
 
     if (initialData) {
       setType(initialData.type || 'expense');
       setAmount(initialData.amount ? formatAmountInput(initialData.amount) : '');
       setTitle(initialData.title || '');
       setCategory(initialData.category || '');
-      setPaymentMethod(initialData.paymentMethod || defaultMethod);
+      setPaymentMethod(initialData.paymentMethod || primaryMethod);
       setDate(initialData.date || '');
       setTime(initialData.time || '');
       setNotes(initialData.notes || '');
@@ -64,7 +69,7 @@ export default function TransactionModal({
       setAmount('');
       setTitle('');
       setCategory('Makanan & Minuman');
-      setPaymentMethod(defaultMethod);
+      setPaymentMethod(primaryMethod);
       setDate(defaultDate);
       setTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
       setNotes('');
@@ -254,22 +259,29 @@ export default function TransactionModal({
           <div className="input-group">
             <label className="input-label">Metode Pembayaran / Rekening</label>
             <div className="method-chips-scroll">
-              {paymentMethodsList.map(m => {
-                const isCash = m.icon === 'Banknote' || m.name.toLowerCase().includes('tunai') || m.name.toLowerCase().includes('cash');
-                const isEwallet = m.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => m.name.toLowerCase().includes(e));
+              {[...paymentMethodsList]
+                .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))
+                .map(m => {
+                  const isCash = m.icon === 'Banknote' || m.name.toLowerCase().includes('tunai') || m.name.toLowerCase().includes('cash');
+                  const isEwallet = m.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => m.name.toLowerCase().includes(e));
 
-                return (
-                  <button 
-                    key={m.id}
-                    type="button"
-                    className={`method-chip-btn ${paymentMethod === m.name ? 'selected' : ''}`}
-                    onClick={() => setPaymentMethod(m.name)}
-                  >
-                    {isCash ? <Banknote size={13} /> : isEwallet ? <Smartphone size={13} /> : <CreditCard size={13} />}
-                    <span>{m.name}</span>
-                  </button>
-                );
-              })}
+                  return (
+                    <button 
+                      key={m.id}
+                      type="button"
+                      className={`method-chip-btn ${paymentMethod === m.name ? 'selected' : ''} ${m.isPrimary ? 'is-primary-chip' : ''}`}
+                      onClick={() => setPaymentMethod(m.name)}
+                    >
+                      {isCash ? <Banknote size={13} /> : isEwallet ? <Smartphone size={13} /> : <CreditCard size={13} />}
+                      <span>{m.name}</span>
+                      {m.isPrimary && (
+                        <span className="chip-star-tag" title="Rekening Utama">
+                          <Star size={9} fill="currentColor" /> Utama
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
             </div>
           </div>
 

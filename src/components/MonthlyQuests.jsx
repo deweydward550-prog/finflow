@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   Trophy, CheckCircle2, Swords, Sparkles, Plus, 
   ChevronRight, ArrowRight, ShieldCheck, Check, Clock,
-  Wallet, CreditCard, Banknote, Target, ChevronDown, Smartphone
+  Wallet, CreditCard, Banknote, Target, ChevronDown, Smartphone, Star
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { getCustomPaymentMethods } from '../db/db';
+import { getCustomPaymentMethods, getPrimaryPaymentMethod } from '../db/db';
 import { 
   formatRupiah, formatMonthYear, getRecurringDueInfo,
   formatAmountInput, parseAmountInput 
@@ -24,8 +24,8 @@ export default function MonthlyQuests({
   const [animatingId, setAnimatingId] = useState(null);
   const [incomeAmount, setIncomeAmount] = useState('8.500.000');
   const [incomeTitle, setIncomeTitle] = useState('Gaji Pokok Bulanan');
-  const [paymentMethodsList, setPaymentMethodsList] = useState(getCustomPaymentMethods());
-  const [incomeMethod, setIncomeMethod] = useState(() => getCustomPaymentMethods()[0]?.name || 'BCA');
+  const [paymentMethodsList, setPaymentMethodsList] = useState(() => getCustomPaymentMethods());
+  const [incomeMethod, setIncomeMethod] = useState(() => getPrimaryPaymentMethod()?.name || 'BCA');
   const [isSubmittingIncome, setIsSubmittingIncome] = useState(false);
   const [showIncomeDetails, setShowIncomeDetails] = useState(false);
 
@@ -34,7 +34,10 @@ export default function MonthlyQuests({
     const handleUpdate = () => {
       const methods = getCustomPaymentMethods();
       setPaymentMethodsList(methods);
-      if (methods.length > 0 && !methods.some(m => m.name === incomeMethod)) {
+      const primary = getPrimaryPaymentMethod();
+      if (primary) {
+        setIncomeMethod(primary.name);
+      } else if (methods.length > 0 && !methods.some(m => m.name === incomeMethod)) {
         setIncomeMethod(methods[0].name);
       }
     };
@@ -283,24 +286,31 @@ export default function MonthlyQuests({
                     </div>
 
                     <div className="quest-input-mini">
-                      <label>Rekening Penerima:</label>
+                      <label>Rekening Penerima (Prioritas Utama):</label>
                       <div className="method-chips-scroll">
-                        {paymentMethodsList.map(m => {
-                          const isCash = m.icon === 'Banknote' || m.name.toLowerCase().includes('tunai') || m.name.toLowerCase().includes('cash');
-                          const isEwallet = m.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => m.name.toLowerCase().includes(e));
+                        {[...paymentMethodsList]
+                          .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))
+                          .map(m => {
+                            const isCash = m.icon === 'Banknote' || m.name.toLowerCase().includes('tunai') || m.name.toLowerCase().includes('cash');
+                            const isEwallet = m.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => m.name.toLowerCase().includes(e));
 
-                          return (
-                            <button 
-                              key={m.id}
-                              type="button"
-                              className={`method-chip-btn ${incomeMethod === m.name ? 'selected' : ''}`}
-                              onClick={() => setIncomeMethod(m.name)}
-                            >
-                              {isCash ? <Banknote size={12} /> : isEwallet ? <Smartphone size={12} /> : <CreditCard size={12} />}
-                              <span>{m.name}</span>
-                            </button>
-                          );
-                        })}
+                            return (
+                              <button 
+                                key={m.id}
+                                type="button"
+                                className={`method-chip-btn ${incomeMethod === m.name ? 'selected' : ''} ${m.isPrimary ? 'is-primary-chip' : ''}`}
+                                onClick={() => setIncomeMethod(m.name)}
+                              >
+                                {isCash ? <Banknote size={12} /> : isEwallet ? <Smartphone size={12} /> : <CreditCard size={12} />}
+                                <span>{m.name}</span>
+                                {m.isPrimary && (
+                                  <span className="chip-star-tag" title="Rekening Utama">
+                                    <Star size={9} fill="currentColor" /> Utama
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
                       </div>
                     </div>
                   </div>

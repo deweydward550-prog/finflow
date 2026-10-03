@@ -4,7 +4,7 @@ import {
   ShieldCheck, HardDrive, Check, AlertTriangle, Sparkles, 
   Send, Bot, Cloud, CheckCircle2, AlertCircle, HelpCircle,
   ExternalLink, Eye, EyeOff, CreditCard, ChevronRight, ChevronLeft,
-  Plus, Edit2, Trash2, Banknote, Smartphone, Wallet
+  Plus, Edit2, Trash2, Banknote, Smartphone, Wallet, Star
 } from 'lucide-react';
 import { 
   getTelegramConfig, saveTelegramConfig, testTelegramConnection, 
@@ -13,7 +13,7 @@ import {
 import { 
   exportDatabaseToJson, importDatabaseFromJson, resetDatabaseToSample,
   clearAllDatabaseData, getCustomPaymentMethods, saveCustomPaymentMethods,
-  DEFAULT_PAYMENT_METHODS
+  setPrimaryPaymentMethod, DEFAULT_PAYMENT_METHODS
 } from '../db/db';
 
 export default function SettingsModal({
@@ -48,6 +48,7 @@ export default function SettingsModal({
   const [methodName, setMethodName] = useState('');
   const [methodType, setMethodType] = useState('bank');
   const [methodNumber, setMethodNumber] = useState('');
+  const [methodIsPrimary, setMethodIsPrimary] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -150,6 +151,7 @@ export default function SettingsModal({
     setMethodName('');
     setMethodType('bank');
     setMethodNumber('');
+    setMethodIsPrimary(paymentMethods.length === 0);
     setIsAddingMethod(true);
   };
 
@@ -158,7 +160,14 @@ export default function SettingsModal({
     setMethodName(item.name || '');
     setMethodType(item.icon === 'Banknote' ? 'cash' : item.icon === 'Smartphone' ? 'ewallet' : 'bank');
     setMethodNumber(item.number || '');
+    setMethodIsPrimary(!!item.isPrimary);
     setIsAddingMethod(true);
+  };
+
+  const handleSetPrimary = (id) => {
+    const updated = setPrimaryPaymentMethod(id);
+    setPaymentMethods(updated);
+    showToast('⭐ Rekening Utama berhasil diatur!', 'success');
   };
 
   const handleSavePaymentMethod = (e) => {
@@ -173,24 +182,40 @@ export default function SettingsModal({
 
     let updated;
     if (editingMethod) {
-      updated = paymentMethods.map(m => m.id === editingMethod.id ? {
-        ...m,
-        name: methodName.trim(),
-        icon,
-        color,
-        number: methodNumber.trim()
-      } : m);
-      showToast('Metode pembayaran diperbarui!', 'success');
+      updated = paymentMethods.map(m => {
+        if (m.id === editingMethod.id) {
+          return {
+            ...m,
+            name: methodName.trim(),
+            icon,
+            color,
+            number: methodNumber.trim(),
+            isPrimary: methodIsPrimary ? true : (m.isPrimary && !paymentMethods.some(other => other.id !== m.id && other.isPrimary))
+          };
+        }
+        return methodIsPrimary ? { ...m, isPrimary: false } : m;
+      });
+      showToast('Rekening berhasil diperbarui!', 'success');
     } else {
       const newMethod = {
         id: 'pm_' + Date.now(),
         name: methodName.trim(),
         icon,
         color,
-        number: methodNumber.trim()
+        number: methodNumber.trim(),
+        isPrimary: methodIsPrimary || paymentMethods.length === 0
       };
-      updated = [...paymentMethods, newMethod];
-      showToast('Metode pembayaran baru ditambahkan!', 'success');
+      if (newMethod.isPrimary) {
+        updated = [...paymentMethods.map(m => ({ ...m, isPrimary: false })), newMethod];
+      } else {
+        updated = [...paymentMethods, newMethod];
+      }
+      showToast('Rekening baru berhasil ditambahkan!', 'success');
+    }
+
+    // Ensure at least one primary
+    if (!updated.some(m => m.isPrimary) && updated.length > 0) {
+      updated[0].isPrimary = true;
     }
 
     setPaymentMethods(updated);
@@ -201,13 +226,17 @@ export default function SettingsModal({
 
   const handleDeletePaymentMethod = (id) => {
     if (paymentMethods.length <= 1) {
-      showToast('Minimal harus ada 1 metode pembayaran', 'error');
+      showToast('Minimal harus ada 1 rekening / metode pembayaran', 'error');
       return;
     }
-    const updated = paymentMethods.filter(m => m.id !== id);
+    const itemToDelete = paymentMethods.find(m => m.id === id);
+    let updated = paymentMethods.filter(m => m.id !== id);
+    if (itemToDelete?.isPrimary && updated.length > 0) {
+      updated[0].isPrimary = true;
+    }
     setPaymentMethods(updated);
     saveCustomPaymentMethods(updated);
-    showToast('Metode pembayaran dihapus', 'info');
+    showToast('Rekening berhasil dihapus', 'info');
   };
 
   // Export JSON backup file
@@ -651,6 +680,19 @@ export default function SettingsModal({
                     </div>
                   </div>
 
+                  {/* Set as Primary Toggle */}
+                  <label className="method-primary-toggle-row">
+                    <input 
+                      type="checkbox"
+                      checked={methodIsPrimary}
+                      onChange={(e) => setMethodIsPrimary(e.target.checked)}
+                    />
+                    <span className="text-xs">
+                      <Star size={13} className="text-warn inline" style={{ verticalAlign: 'middle', marginRight: '4px' }} fill={methodIsPrimary ? 'currentColor' : 'none'} />
+                      <strong>Jadikan Rekening Utama</strong> (Prioritas pemasukan & simpanan)
+                    </span>
+                  </label>
+
                   <div className="method-form-actions">
                     <button 
                       type="button" 
@@ -674,18 +716,37 @@ export default function SettingsModal({
                   const isEwallet = item.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => item.name.toLowerCase().includes(e));
 
                   return (
-                    <div key={item.id} className="method-item-row">
+                    <div key={item.id} className={`method-item-row ${item.isPrimary ? 'is-primary-row' : ''}`}>
                       <div className="method-item-left">
                         <div className="method-item-icon" style={{ color: item.color || '#0060AF' }}>
                           {isCash ? <Banknote size={16} /> : isEwallet ? <Smartphone size={16} /> : <CreditCard size={16} />}
                         </div>
                         <div className="method-item-info">
-                          <span className="method-item-name">{item.name}</span>
+                          <div className="method-item-name-row">
+                            <span className="method-item-name">{item.name}</span>
+                            {item.isPrimary && (
+                              <span className="badge-primary-pill" title="Rekening Utama">
+                                <Star size={10} fill="currentColor" />
+                                <span>Utama</span>
+                              </span>
+                            )}
+                          </div>
                           {item.number && <span className="method-item-number">{item.number}</span>}
                         </div>
                       </div>
 
                       <div className="method-item-actions">
+                        {!item.isPrimary && (
+                          <button 
+                            type="button" 
+                            className="btn-set-primary-subtle" 
+                            onClick={() => handleSetPrimary(item.id)}
+                            title="Jadikan sebagai Rekening Utama"
+                          >
+                            <Star size={12} />
+                            <span>Jadikan Utama</span>
+                          </button>
+                        )}
                         <button 
                           type="button"
                           className="btn-icon-subtle"

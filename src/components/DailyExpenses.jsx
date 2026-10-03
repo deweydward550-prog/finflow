@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, Plus, Trash2, Edit2, Layers, Info, 
-  ChevronDown, CreditCard, Banknote, Smartphone, Wallet
+  ChevronDown, CreditCard, Banknote, Smartphone, Wallet, Star
 } from 'lucide-react';
 import { 
   formatRupiah, formatDateID, getRelativeDayLabel, 
@@ -41,6 +41,7 @@ export default function DailyExpenses({
   }, []);
 
   // Compute breakdown per account / payment method (excluding cash as requested)
+  // Khusus pengeluaran harian tidak memotong saldo rekening (khusus pencatatan saja)
   const accountBalances = useMemo(() => {
     return paymentMethodsList
       .filter(method => {
@@ -62,14 +63,16 @@ export default function DailyExpenses({
 
         const isEwallet = method.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => method.name.toLowerCase().includes(e));
 
+        // Saldo simpanan rekening murni dari pemasukan tercatat (pengeluaran harian tidak memotong saldo)
         return {
           ...method,
           income: inc,
           expense: exp,
-          balance: inc - exp,
+          balance: inc,
           isEwallet
         };
-      });
+      })
+      .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
   }, [paymentMethodsList, transactions]);
 
   const filteredTransactions = useMemo(() => {
@@ -153,19 +156,26 @@ export default function DailyExpenses({
 
             <div className="zen-accounts-grid">
               {accountBalances.map(acc => (
-                <div key={acc.id} className="zen-account-card">
+                <div key={acc.id} className={`zen-account-card ${acc.isPrimary ? 'is-primary-card' : ''}`}>
                   <div className="zen-account-card-left">
                     <div className="zen-account-card-icon" style={{ color: acc.color || '#0060AF' }}>
                       {acc.isCash ? <Banknote size={15} /> : acc.isEwallet ? <Smartphone size={15} /> : <CreditCard size={15} />}
                     </div>
                     <div className="zen-account-card-name-wrap">
-                      <span className="zen-account-card-name">{acc.name}</span>
+                      <div className="zen-account-name-row">
+                        <span className="zen-account-card-name">{acc.name}</span>
+                        {acc.isPrimary && (
+                          <span className="zen-card-primary-tag" title="Rekening Utama">
+                            <Star size={9} fill="currentColor" /> Utama
+                          </span>
+                        )}
+                      </div>
                       {acc.number && <span className="zen-account-card-num">{acc.number}</span>}
                     </div>
                   </div>
 
                   <div className="zen-account-card-right">
-                    <span className={`zen-account-card-balance ${acc.balance > 0 ? 'text-inc' : acc.balance < 0 ? 'text-exp' : ''}`}>
+                    <span className={`zen-account-card-balance ${acc.balance > 0 ? 'text-inc' : ''}`}>
                       {acc.balance > 0 ? '+' : ''}{formatRupiah(acc.balance)}
                     </span>
                     <span className="zen-account-card-flow">
