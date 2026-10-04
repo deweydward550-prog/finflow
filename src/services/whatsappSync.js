@@ -104,8 +104,13 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
   // Helper to import incoming transaction item into Dexie
   const importItemToDb = async (item) => {
     const primary = getPrimaryPaymentMethod();
-    const defaultMethod = primary ? primary.name : 'BCA';
-    const finalPaymentMethod = item.paymentMethod || defaultMethod;
+    const currentPrimaryName = primary ? primary.name : 'BSI';
+
+    let finalPaymentMethod = item.paymentMethod;
+    // If the item did not have an explicit account specified by the user in WhatsApp, ALWAYS assign current Primary Account!
+    if (item.isDefaultPrimary || !item.isExplicitAccount || !finalPaymentMethod) {
+      finalPaymentMethod = currentPrimaryName;
+    }
 
     const existing = await db.transactions.where('id').equals(item.id).first();
     if (!existing) {
@@ -118,6 +123,7 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
         date: item.date,
         time: item.time || '12:00',
         notes: item.notes || `Input otomatis via WhatsApp Bot (${finalPaymentMethod})`,
+        source: 'whatsapp',
         createdAt: item.createdAt || new Date().toISOString()
       });
     }

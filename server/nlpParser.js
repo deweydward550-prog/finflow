@@ -252,7 +252,10 @@ export function parseSingleItem(rawSegment, options = {}) {
   const category = detectCategory(title, type);
 
   // Resolve payment method / account
-  const paymentMethod = resolvePaymentMethod(rawAccount, availableAccounts, primaryAccount);
+  const isExplicitAccount = Boolean(rawAccount && rawAccount.trim());
+  const paymentMethod = isExplicitAccount
+    ? resolvePaymentMethod(rawAccount, availableAccounts, primaryAccount)
+    : (primaryAccount || 'BSI');
 
   const now = new Date();
   const date = now.toISOString().split('T')[0];
@@ -265,6 +268,8 @@ export function parseSingleItem(rawSegment, options = {}) {
     type,
     category,
     paymentMethod,
+    isExplicitAccount,
+    isDefaultPrimary: !isExplicitAccount,
     date,
     time,
     notes: `Input otomatis via WhatsApp Bot (${paymentMethod})`,
