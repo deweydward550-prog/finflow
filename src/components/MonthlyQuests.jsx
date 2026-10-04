@@ -22,7 +22,7 @@ export default function MonthlyQuests({
   onOpenNewRecurring
 }) {
   const [animatingId, setAnimatingId] = useState(null);
-  const [incomeAmount, setIncomeAmount] = useState('8.500.000');
+  const [incomeAmount, setIncomeAmount] = useState('');
   const [incomeTitle, setIncomeTitle] = useState('Gaji Pokok Bulanan');
   const [paymentMethodsList, setPaymentMethodsList] = useState(() => getCustomPaymentMethods());
   const [incomeMethod, setIncomeMethod] = useState(() => getPrimaryPaymentMethod()?.name || 'BCA');
