@@ -824,6 +824,16 @@ export default function SettingsModal({
                     <span>{scanProgressText || 'Memindai jaringan lokal 192.168.0.0 - 255...'}</span>
                   </div>
                 )}
+
+                {/* HTTPS Mixed Content Warning Notice */}
+                {typeof window !== 'undefined' && window.location.protocol === 'https:' && serverUrlInput.startsWith('http://') && (
+                  <div className="wa-https-warning-banner">
+                    <AlertCircle size={14} className="text-warning flex-shrink-0" />
+                    <span>
+                      <strong>Info Keamanan Browser:</strong> Web ini dibuka via HTTPS (Vercel/Cloud). Browser memblokir HTTP lokal (Mixed Content). Gunakan tombol <strong>🌐 HTTPS Tunnel</strong> atau buka web via Wi-Fi: <code>http://192.168.0.2:5173</code>
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* 2. Terminal Command Card */}

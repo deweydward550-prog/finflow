@@ -3022,11 +3022,39 @@
 .text-warn { color: var(--warning); }
 .text-muted { color: var(--text-muted); }
 .text-xs { font-size: 0.75rem; }
-.text-2xs { font-size: 0.65rem; }
-.font-mono { font-family: ui-monospace, SFMono-Regular, monospace; }
-.rotate-180 { transform: rotate(180deg); }
-.mt-1 { margin-top: 0.25rem; }
-.mt-2 { margin-top: 0.5rem; }
+.wa-https-warning-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-md);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.725rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-top: 0.35rem;
+}
+
+.wa-https-warning-banner code {
+  background: var(--bg-hover);
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+  font-weight: 700;
+}
+
+.wa-scan-progress-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--primary);
+  background: var(--primary-soft);
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--radius-sm);
+  margin-top: 0.35rem;
+}
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-4px); }
