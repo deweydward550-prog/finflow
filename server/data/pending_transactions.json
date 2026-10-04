@@ -1,17 +1,1 @@
-[
-  {
-    "id": "tx_wa_1791093943083_sbnmp",
-    "title": "Naspad",
-    "amount": 13000,
-    "type": "expense",
-    "category": "Makanan & Minuman",
-    "paymentMethod": "BSI",
-    "isExplicitAccount": false,
-    "isDefaultPrimary": true,
-    "date": "2026-10-04",
-    "time": "13.05",
-    "notes": "Input otomatis via WhatsApp Bot (BSI)",
-    "source": "whatsapp",
-    "createdAt": "2026-10-04T06:05:43.083Z"
-  }
-]
+[]

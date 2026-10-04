@@ -53,6 +53,7 @@ export default function SettingsModal({
   const [isSendingTestChat, setIsSendingTestChat] = useState(false);
   const [isScanningNetwork, setIsScanningNetwork] = useState(false);
   const [scanProgressText, setScanProgressText] = useState('');
+  const [showWaGuide, setShowWaGuide] = useState(false);
 
   const refreshWaStatus = async (customUrl) => {
     const urlToUse = (customUrl !== undefined ? customUrl : serverUrlInput) || getBotServerUrl();
@@ -436,25 +437,25 @@ export default function SettingsModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content settings-modal-wide" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="modal-header">
-          <div className="modal-title-wrap">
+        <div className="modal-header settings-modal-header">
+          <div className="settings-header-left">
             {currentView !== 'main' && (
               <button 
                 type="button" 
-                className="btn-back-settings" 
+                className="btn-back-circle" 
                 onClick={() => {
                   setIsAddingMethod(false);
                   setCurrentView('main');
                 }}
-                title="Kembali ke menu utama"
+                title="Kembali ke menu"
+                aria-label="Kembali"
               >
-                <ChevronLeft size={16} />
-                <span>Kembali</span>
+                <ChevronLeft size={18} />
               </button>
             )}
             <h3 className="modal-title">{getViewTitle()}</h3>
           </div>
-          <button className="btn-icon-subtle" onClick={onClose} title="Tutup">
+          <button className="btn-icon-subtle" onClick={onClose} title="Tutup" aria-label="Tutup">
             <X size={18} />
           </button>
         </div>
@@ -724,127 +725,63 @@ export default function SettingsModal({
               2. SUB-MENU: WHATSAPP BOT SERVER
               ========================================================= */}
           {currentView === 'whatsapp_bot' && (
-            <div className="settings-section tg-database-section">
-              <div className="tg-section-header">
-                <div className="tg-title-wrap">
-                  <MessageCircle size={18} className="text-inc" />
-                  <h4 className="settings-section-title">WhatsApp Bot Server</h4>
-                </div>
-
-                <span className={`badge ${waServerStatus.status === 'connected' ? 'badge-success' : waServerStatus.status === 'qr' ? 'badge-warning' : 'badge-neutral'}`}>
-                  {waServerStatus.status === 'connected' ? '🟢 Bot Aktif' : waServerStatus.status === 'qr' ? '🟡 Menunggu Scan QR' : '⚪ Server Offline / Belum Terhubung'}
-                </span>
-              </div>
-
-              <p className="text-muted text-xs">
-                Catat pengeluaran cukup dengan mengirim chat ke WhatsApp Anda sendiri atau bot. Server berjalan di komputer lokal Anda (Port 5051).
-              </p>
-
-              {/* HTTPS / Vercel Tunnel Notice */}
-              {window.location.protocol === 'https:' && (
-                <div className="wa-https-banner">
-                  <div className="wa-https-header">
-                    <Cloud size={15} className="text-primary" />
-                    <strong>Server URL Permanen (Tidak Pernah Berubah)</strong>
+            <div className="wa-container-clean">
+              {/* 1. Primary Card: Server & Status */}
+              <div className="wa-card">
+                <div className="wa-card-header">
+                  <div className="wa-card-title">
+                    <MessageCircle size={16} className="text-inc" />
+                    <span>Status WhatsApp Bot</span>
                   </div>
-                  <p className="text-2xs text-muted leading-relaxed mt-1">
-                    Jalur HTTPS Tunnel kini telah diset <strong>permanen & statis</strong> di <code>https://finflow-dewey-bot.loca.lt</code>. Cukup jalankan bot di komputer Anda:
-                  </p>
-                  <div className="wa-cmd-code-row mt-1">
-                    <code>npm run bot</code>
-                    <button 
-                      type="button" 
-                      className="btn-copy-cmd" 
-                      onClick={() => {
-                        navigator.clipboard.writeText('npm run bot');
-                        showToast('Perintah "npm run bot" disalin ke clipboard!', 'info');
-                      }}
-                      title="Salin Perintah"
-                    >
-                      <Copy size={12} />
-                      <span>Salin</span>
-                    </button>
-                  </div>
-                  <p className="text-2xs text-muted mt-1">
-                    Bot WhatsApp dan HTTPS Tunnel otomatis aktif bersamaan dengan URL yang sama tanpa perlu mengganti URL lagi!
-                  </p>
-                </div>
-              )}
-
-              {/* Bot Server URL Config */}
-              <div className="input-group">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  <label className="input-label" style={{ margin: 0 }}>Bot Server URL (Pilih Sesuai Jaringan):</label>
-                  {isScanningNetwork && (
-                    <span style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <RefreshCw size={11} className="spin" />
-                      {scanProgressText || 'Memindai Wi-Fi...'}
-                    </span>
-                  )}
+                  <span className={`badge ${waServerStatus.status === 'connected' ? 'badge-success' : waServerStatus.status === 'qr' ? 'badge-warning' : 'badge-neutral'}`}>
+                    {waServerStatus.status === 'connected' ? '🟢 Bot Aktif & Siap' : waServerStatus.status === 'qr' ? '🟡 Scan QR WhatsApp' : '⚪ Server Offline'}
+                  </span>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', margin: '0.25rem 0' }}>
+                {/* Segmented Preset Selector */}
+                <div className="wa-mode-tabs">
                   <button
                     type="button"
-                    className="chip-btn"
-                    onClick={handleScanLocalNetwork}
-                    disabled={isScanningNetwork}
-                    style={{
-                      background: isScanningNetwork ? 'var(--bg-hover)' : 'rgba(16, 185, 129, 0.12)',
-                      borderColor: 'rgba(16, 185, 129, 0.4)',
-                      color: '#059669',
-                      fontWeight: 600
-                    }}
-                    title="Otomatis cari IP PC/server di subnet 192.168.0.0 - 192.168.0.255 mulai dari IP terkecil"
-                  >
-                    <RefreshCw size={11} className={isScanningNetwork ? 'spin' : ''} />
-                    <span>{isScanningNetwork ? '🔍 Sedang Memindai...' : '🔍 Scan Otomatis Wi-Fi (192.168.0.0 - 255)'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="chip-btn"
+                    className={`wa-mode-btn ${serverUrlInput === LOCAL_WIFI_BOT_URL ? 'active' : ''}`}
                     onClick={() => {
                       setServerUrlInput(LOCAL_WIFI_BOT_URL);
                       setBotServerUrl(LOCAL_WIFI_BOT_URL);
                       refreshWaStatus(LOCAL_WIFI_BOT_URL);
-                      showToast('📶 Menggunakan IP Wi-Fi Lokal PC (Cepat & Stabil)!', 'success');
+                      showToast('📶 Mode Wi-Fi Lokal PC (192.168.0.2)', 'success');
                     }}
-                    title="Gunakan saat HP & PC berada di jaringan Wi-Fi yang sama (Paling Cepat & Stabil)"
                   >
-                    📶 Wi-Fi Lokal (192.168.0.2)
+                    <span>📶 Wi-Fi Lokal</span>
                   </button>
 
                   <button
                     type="button"
-                    className="chip-btn"
+                    className={`wa-mode-btn ${serverUrlInput === PERMANENT_BOT_URL ? 'active' : ''}`}
                     onClick={() => {
                       setServerUrlInput(PERMANENT_BOT_URL);
                       setBotServerUrl(PERMANENT_BOT_URL);
                       refreshWaStatus(PERMANENT_BOT_URL);
-                      showToast('🌐 Menggunakan URL HTTPS Tunnel Online!', 'info');
+                      showToast('🌐 Mode HTTPS Tunnel Online', 'info');
                     }}
-                    title="Gunakan saat HP menggunakan kuota data seluler di luar rumah"
                   >
-                    🌐 HTTPS Tunnel Online
+                    <span>🌐 HTTPS Tunnel</span>
                   </button>
 
                   <button
                     type="button"
-                    className="chip-btn"
+                    className={`wa-mode-btn ${serverUrlInput === 'http://localhost:5051' ? 'active' : ''}`}
                     onClick={() => {
                       setServerUrlInput('http://localhost:5051');
                       setBotServerUrl('http://localhost:5051');
                       refreshWaStatus('http://localhost:5051');
-                      showToast('💻 Menggunakan Localhost!', 'info');
+                      showToast('💻 Mode Localhost (5051)', 'info');
                     }}
-                    title="Gunakan saat membuka website di laptop/PC yang sama"
                   >
-                    💻 Localhost (5051)
+                    <span>💻 Localhost</span>
                   </button>
                 </div>
 
-                <div className="wa-url-input-row">
+                {/* Server URL Input with Auto-Scan and Refresh */}
+                <div className="wa-input-actions-bar">
                   <input 
                     type="text"
                     className="input-control font-mono text-xs"
@@ -858,26 +795,44 @@ export default function SettingsModal({
                   />
                   <button 
                     type="button" 
+                    className="wa-btn-scan"
+                    onClick={handleScanLocalNetwork}
+                    disabled={isScanningNetwork}
+                    title="Otomatis cari server di subnet 192.168.0.0 - 255"
+                  >
+                    <RefreshCw size={12} className={isScanningNetwork ? 'spin' : ''} />
+                    <span>{isScanningNetwork ? 'Scan...' : 'Auto Scan'}</span>
+                  </button>
+                  <button 
+                    type="button" 
                     className="btn btn-secondary btn-sm"
                     onClick={() => {
                       setBotServerUrl(serverUrlInput);
                       refreshWaStatus(serverUrlInput);
-                      showToast('Server URL disimpan & status diperbarui', 'info');
+                      showToast('Status server diperbarui', 'info');
                     }}
+                    title="Periksa koneksi server"
                   >
                     <RefreshCw size={12} />
-                    <span>Cek</span>
                   </button>
                 </div>
+
+                {/* Live Scan Progress Info */}
+                {isScanningNetwork && (
+                  <div className="wa-scan-progress-strip">
+                    <RefreshCw size={12} className="spin" />
+                    <span>{scanProgressText || 'Memindai jaringan lokal 192.168.0.0 - 255...'}</span>
+                  </div>
+                )}
               </div>
 
-              {/* Command Box to Run Server */}
-              <div className="wa-cmd-box">
+              {/* 2. Terminal Command Card */}
+              <div className="wa-card">
                 <div className="wa-cmd-label">
-                  <Terminal size={13} className="text-muted" />
-                  <span>Perintah Menjalankan Bot Server di Komputer:</span>
+                  <Terminal size={14} className="text-muted" />
+                  <span>Jalankan bot server di komputer (Terminal / CMD):</span>
                 </div>
-                <div className="wa-cmd-code-row">
+                <div className="wa-cmd-clean">
                   <code>npm run bot</code>
                   <button 
                     type="button" 
@@ -894,32 +849,12 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Format Examples Card */}
-              <div className="wa-guide-card">
-                <span className="wa-guide-title">Aturan & Contoh Format Chat WhatsApp:</span>
-                <div className="wa-examples-list">
-                  <div className="wa-example-item">
-                    <span className="wa-ex-badge">Format Khusus Rekening (Nama, Nominal, Rekening)</span>
-                    <code>naspad 13000 sea / bensin 30k bsi / jajan 25.000 bca</code>
-                  </div>
-                  <div className="wa-example-item">
-                    <span className="wa-ex-badge">Otomatis Rekening Utama (Tanpa Rekening)</span>
-                    <code>lauk 20k / kopi 18rb / cukur 25k</code>
-                  </div>
-                  <div className="wa-example-item">
-                    <span className="wa-ex-badge">Pemisah Multi-Item (Garis Miring / Koma / Baris Baru)</span>
-                    <code>naspad 13000 sea, bensin 30k bsi, lauk 20k</code>
-                  </div>
-                </div>
-              </div>
-
-              {/* Interactive Live Test Simulator */}
-              <div className="wa-simulator-box">
-                <div className="wa-simulator-header">
+              {/* 3. Simulator Quick Test Card */}
+              <div className="wa-card">
+                <div className="wa-card-title">
                   <Zap size={14} className="text-warn" />
-                  <span className="text-xs font-bold">Simulator Uji Coba Chat (Langsung Input ke FinFlow):</span>
+                  <span>Simulator Chat WhatsApp (Langsung Masuk ke FinFlow):</span>
                 </div>
-
                 <form onSubmit={handleTestSendChat} className="wa-simulator-form">
                   <input 
                     type="text"
@@ -936,6 +871,38 @@ export default function SettingsModal({
                     {isSendingTestChat ? 'Memproses...' : 'Kirim & Catat ke FinFlow'}
                   </button>
                 </form>
+              </div>
+
+              {/* 4. Collapsible Formatting Guide (Clean Drawer) */}
+              <div className="wa-guide-accordion">
+                <button 
+                  type="button" 
+                  className="wa-guide-header-btn"
+                  onClick={() => setShowWaGuide(!showWaGuide)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <HelpCircle size={14} className="text-primary" />
+                    <span>Panduan Format Chat WhatsApp</span>
+                  </div>
+                  <span className="text-xs text-muted">{showWaGuide ? '▲ Tutup' : '▼ Buka Contoh'}</span>
+                </button>
+
+                {showWaGuide && (
+                  <div className="wa-guide-content">
+                    <div className="wa-example-item">
+                      <span className="wa-ex-badge">Format Khusus Rekening (Nama, Nominal, Rekening)</span>
+                      <code>naspad 13000 sea / bensin 30k bsi / jajan 25.000 bca</code>
+                    </div>
+                    <div className="wa-example-item">
+                      <span className="wa-ex-badge">Otomatis Rekening Utama (Tanpa Rekening)</span>
+                      <code>lauk 20k / kopi 18rb / cukur 25k</code>
+                    </div>
+                    <div className="wa-example-item">
+                      <span className="wa-ex-badge">Pemisah Multi-Item</span>
+                      <code>Garis miring ( / ), koma ( , ), atau baris baru</code>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
