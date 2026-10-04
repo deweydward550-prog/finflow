@@ -1,14 +1,25 @@
 import { db, getCustomPaymentMethods, getPrimaryPaymentMethod } from '../db/db';
 import { pushDatabaseToTelegram, getTelegramConfig } from './telegramDb';
 
+export const PERMANENT_BOT_URL = 'https://finflow-dewey-bot.loca.lt';
+
 export function getBotServerUrl() {
   const saved = localStorage.getItem('finflow_wa_server_url');
-  if (saved && saved.trim()) return saved.trim().replace(/\/+$/, '');
-  return 'http://localhost:5051';
+  if (saved && saved.trim()) {
+    return saved.trim().replace(/\/+$/, '');
+  }
+
+  // If accessed from localhost / 127.0.0.1 in development
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:5051';
+  }
+
+  // Default to permanent HTTPS tunnel URL on Vercel / Production
+  return PERMANENT_BOT_URL;
 }
 
 export function setBotServerUrl(url) {
-  if (!url || !url.trim()) {
+  if (!url || !url.trim() || url.trim() === PERMANENT_BOT_URL) {
     localStorage.removeItem('finflow_wa_server_url');
   } else {
     localStorage.setItem('finflow_wa_server_url', url.trim().replace(/\/+$/, ''));

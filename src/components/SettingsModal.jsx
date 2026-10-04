@@ -16,7 +16,7 @@ import {
   clearAllDatabaseData, getCustomPaymentMethods, saveCustomPaymentMethods,
   setPrimaryPaymentMethod, DEFAULT_PAYMENT_METHODS
 } from '../db/db';
-import { testSendManualChat, getBotServerUrl, setBotServerUrl } from '../services/whatsappSync';
+import { testSendManualChat, getBotServerUrl, setBotServerUrl, PERMANENT_BOT_URL } from '../services/whatsappSync';
 
 export default function SettingsModal({
   isOpen,
@@ -701,40 +701,55 @@ export default function SettingsModal({
                 <div className="wa-https-banner">
                   <div className="wa-https-header">
                     <Cloud size={15} className="text-primary" />
-                    <strong>Menghubungkan Bot Lokal ke FinFlow Vercel (HTTPS)</strong>
+                    <strong>Server URL Permanen (Tidak Pernah Berubah)</strong>
                   </div>
                   <p className="text-2xs text-muted leading-relaxed mt-1">
-                    Karena Vercel berjalan di <strong>HTTPS</strong>, browser membatasi koneksi HTTP lokal. Agar Vercel dapat menerima data real-time, jalankan perintah tunnel ini di terminal komputer Anda:
+                    Jalur HTTPS Tunnel kini telah diset <strong>permanen & statis</strong> di <code>https://finflow-dewey-bot.loca.lt</code>. Cukup jalankan bot di komputer Anda:
                   </p>
                   <div className="wa-cmd-code-row mt-1">
-                    <code>npm run tunnel</code>
+                    <code>npm run bot</code>
                     <button 
                       type="button" 
                       className="btn-copy-cmd" 
                       onClick={() => {
-                        navigator.clipboard.writeText('npm run tunnel');
-                        showToast('Perintah "npm run tunnel" disalin ke clipboard!', 'info');
+                        navigator.clipboard.writeText('npm run bot');
+                        showToast('Perintah "npm run bot" disalin ke clipboard!', 'info');
                       }}
-                      title="Salin Perintah Tunnel"
+                      title="Salin Perintah"
                     >
                       <Copy size={12} />
                       <span>Salin</span>
                     </button>
                   </div>
                   <p className="text-2xs text-muted mt-1">
-                    Salin URL HTTPS yang dihasilkan (misal: <code>https://xxx.localtunnel.me</code>) lalu tempel ke kolom <strong>Server URL</strong> di bawah.
+                    Bot WhatsApp dan HTTPS Tunnel otomatis aktif bersamaan dengan URL yang sama tanpa perlu mengganti URL lagi!
                   </p>
                 </div>
               )}
 
               {/* Bot Server URL Config */}
               <div className="input-group">
-                <label className="input-label">Bot Server URL (Lokal / Tunnel)</label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                  <label className="input-label" style={{ margin: 0 }}>Bot Server URL (Lokal / Tunnel Permanen)</label>
+                  <button
+                    type="button"
+                    className="text-xs text-primary"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                    onClick={() => {
+                      setServerUrlInput(PERMANENT_BOT_URL);
+                      setBotServerUrl(PERMANENT_BOT_URL);
+                      refreshWaStatus(PERMANENT_BOT_URL);
+                      showToast('Menggunakan URL Tunnel Permanen Default!', 'success');
+                    }}
+                  >
+                    Gunakan URL Permanen (Default)
+                  </button>
+                </div>
                 <div className="wa-url-input-row">
                   <input 
                     type="text"
                     className="input-control font-mono text-xs"
-                    placeholder="http://localhost:5051 atau https://xxx.localtunnel.me"
+                    placeholder="https://finflow-dewey-bot.loca.lt atau http://localhost:5051"
                     value={serverUrlInput}
                     onChange={(e) => setServerUrlInput(e.target.value)}
                     onBlur={() => {

@@ -11,12 +11,14 @@ import {
   DisconnectReason,
   fetchLatestBaileysVersion
 } from '@whiskeysockets/baileys';
+import localtunnel from 'localtunnel';
 import { parseWhatsAppMessage } from './nlpParser.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = 5051;
+const TUNNEL_SUBDOMAIN = process.env.TUNNEL_SUBDOMAIN || 'finflow-dewey-bot';
 const DATA_DIR = path.join(__dirname, 'data');
 const AUTH_DIR = path.join(__dirname, 'auth_info_baileys');
 const PENDING_FILE = path.join(DATA_DIR, 'pending_transactions.json');
@@ -427,6 +429,56 @@ async function startWhatsAppBot() {
   }
 }
 
+// Automatic Persistent HTTPS Tunnel
+let currentTunnel = null;
+let isTunnelConnecting = false;
+
+async function startPersistentTunnel() {
+  if (isTunnelConnecting) return;
+  isTunnelConnecting = true;
+
+  try {
+    if (currentTunnel) {
+      try { currentTunnel.close(); } catch {}
+      currentTunnel = null;
+    }
+
+    console.log(`🌐 Membuka HTTPS Tunnel Permanen (Subdomain: ${TUNNEL_SUBDOMAIN})...`);
+    currentTunnel = await localtunnel({
+      port: PORT,
+      subdomain: TUNNEL_SUBDOMAIN,
+      local_host: '127.0.0.1'
+    });
+
+    console.log('\n======================================================');
+    console.log(`🔒 [HTTPS TUNNEL PERMANEN AKTIF]`);
+    console.log(`🌐 URL Tetap: ${currentTunnel.url}`);
+    console.log(`✨ URL ini TIDAK PERNAH BERUBAH dan siap digunakan di Vercel!`);
+    console.log('======================================================\n');
+
+    currentTunnel.on('close', () => {
+      console.log('⚠️ Tunnel terputus. Menghubungkan ulang secara otomatis dalam 5 detik...');
+      currentTunnel = null;
+      isTunnelConnecting = false;
+      setTimeout(startPersistentTunnel, 5000);
+    });
+
+    currentTunnel.on('error', (err) => {
+      console.error('⚠️ Tunnel error:', err.message);
+      currentTunnel = null;
+      isTunnelConnecting = false;
+      setTimeout(startPersistentTunnel, 5000);
+    });
+  } catch (err) {
+    console.error('⚠️ Gagal membuka tunnel otomatis:', err.message);
+    currentTunnel = null;
+    isTunnelConnecting = false;
+    setTimeout(startPersistentTunnel, 8000);
+  } finally {
+    isTunnelConnecting = false;
+  }
+}
+
 // Start Express API Server
 app.listen(PORT, '0.0.0.0', () => {
   console.log('\n======================================================');
@@ -435,4 +487,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🔄 Realtime Stream: http://localhost:${PORT}/api/stream`);
   console.log('======================================================\n');
   startWhatsAppBot();
+  startPersistentTunnel();
 });
