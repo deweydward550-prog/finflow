@@ -1,11 +1,16 @@
 /**
  * FinFlow Telegram Cloud Database Service
  * Uses Telegram Bot API as a 100% free, private, cloud-synced text/JSON database.
+ * Supports auto-sync across all devices (mobile, tablet, desktop).
  */
 
 import { exportDatabaseToJson, importDatabaseFromJson } from '../db/db';
 
 const TELEGRAM_CONFIG_KEY = 'finflow_telegram_config';
+const LAST_SYNCED_MSG_ID_KEY = 'finflow_tg_last_msg_id';
+
+export const DEFAULT_TELEGRAM_BOT_TOKEN = '8732879033:AAFtR0soqSR0LYXfsMaxpm5JbQVH9xbc714';
+export const DEFAULT_TELEGRAM_CHAT_ID = '372613511';
 
 // Get stored Telegram configuration
 export function getTelegramConfig() {
@@ -13,21 +18,28 @@ export function getTelegramConfig() {
     const raw = localStorage.getItem(TELEGRAM_CONFIG_KEY);
     if (!raw) {
       return {
-        botToken: '',
-        chatId: '',
+        botToken: DEFAULT_TELEGRAM_BOT_TOKEN,
+        chatId: DEFAULT_TELEGRAM_CHAT_ID,
         autoSync: true,
         lastSynced: null,
-        isConnected: false
+        isConnected: true
       };
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return {
+      botToken: parsed.botToken || DEFAULT_TELEGRAM_BOT_TOKEN,
+      chatId: parsed.chatId || DEFAULT_TELEGRAM_CHAT_ID,
+      autoSync: parsed.autoSync !== false,
+      lastSynced: parsed.lastSynced || null,
+      isConnected: parsed.isConnected !== false
+    };
   } catch (e) {
     return {
-      botToken: '',
-      chatId: '',
+      botToken: DEFAULT_TELEGRAM_BOT_TOKEN,
+      chatId: DEFAULT_TELEGRAM_CHAT_ID,
       autoSync: true,
       lastSynced: null,
-      isConnected: false
+      isConnected: true
     };
   }
 }
@@ -87,7 +99,7 @@ export async function testTelegramConnection(botToken, chatId) {
   return json.result;
 }
 
-// Push local database state to Telegram as text / JSON
+// Push local database state to Telegram as text / JSON and pin it
 export async function pushDatabaseToTelegram(overrideData = null) {
   const config = getTelegramConfig();
   if (!config.botToken || !config.chatId) {
@@ -118,6 +130,7 @@ export async function pushDatabaseToTelegram(overrideData = null) {
   const formatRp = (n) => 'Rp ' + Math.abs(n).toLocaleString('id-ID');
 
   const compactJson = JSON.stringify(parsed);
+  let messageId = null;
 
   // If payload is within Telegram message limit (~4000 chars)
   if (compactJson.length < 3200) {
@@ -142,9 +155,7 @@ export async function pushDatabaseToTelegram(overrideData = null) {
     if (!result.ok) {
       throw new Error(result.description || 'Gagal mengirim data ke Telegram.');
     }
-
-    saveTelegramConfig({ lastSynced: new Date().toISOString(), isConnected: true });
-    return { success: true, mode: 'text', messageId: result.result.message_id };
+    messageId = result.result.message_id;
   } else {
     // If payload is larger, send as a JSON document attachment
     const blob = new Blob([jsonString], { type: 'application/json' });
@@ -163,83 +174,117 @@ export async function pushDatabaseToTelegram(overrideData = null) {
     if (!result.ok) {
       throw new Error(result.description || 'Gagal mengirim dokumen database ke Telegram.');
     }
-
-    saveTelegramConfig({ lastSynced: new Date().toISOString(), isConnected: true });
-    return { success: true, mode: 'document', messageId: result.result.message_id };
+    messageId = result.result.message_id;
   }
+
+  // Pin the latest database snapshot in Telegram so any device can find it instantly via getChat
+  if (messageId) {
+    try {
+      await fetch(`https://api.telegram.org/bot${config.botToken}/pinChatMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: config.chatId,
+          message_id: messageId,
+          disable_notification: true
+        })
+      });
+      localStorage.setItem(LAST_SYNCED_MSG_ID_KEY, String(messageId));
+    } catch (e) {
+      console.warn('Telegram pin message error:', e);
+    }
+  }
+
+  saveTelegramConfig({ lastSynced: new Date().toISOString(), isConnected: true });
+  return { success: true, messageId };
 }
 
-// Pull the latest database state from Telegram chat / updates
-export async function pullDatabaseFromTelegram() {
+// Pull the latest database state from Telegram chat / pinned snapshot
+export async function pullDatabaseFromTelegram(isAutoSync = false) {
   const config = getTelegramConfig();
   if (!config.botToken || !config.chatId) {
+    if (isAutoSync) return { skipped: true, reason: 'No telegram credentials' };
     throw new Error('Telegram Bot Token dan Chat ID belum dikonfigurasi.');
   }
 
-  // Fetch recent updates from bot
-  const url = `https://api.telegram.org/bot${config.botToken}/getUpdates?limit=100`;
-  const res = await fetch(url);
-  const result = await res.json();
-
-  if (!result.ok) {
-    throw new Error(result.description || 'Gagal mengambil data dari Telegram Bot.');
-  }
-
-  const updates = result.result || [];
-  
-  // Find the latest message containing database snapshot (either text or document)
   let foundJson = null;
   let snapshotDate = null;
+  let snapshotMessageId = null;
 
-  // Search in reverse (newest first)
-  for (let i = updates.length - 1; i >= 0; i--) {
-    const msg = updates[i].message || updates[i].channel_post;
-    if (!msg) continue;
+  // 1. FAST LOOKUP: Check pinned message from getChat
+  try {
+    const chatUrl = `https://api.telegram.org/bot${config.botToken}/getChat?chat_id=${config.chatId}`;
+    const chatRes = await fetch(chatUrl);
+    const chatData = await chatRes.json();
+    
+    if (chatData.ok && chatData.result?.pinned_message) {
+      const pinMsg = chatData.result.pinned_message;
+      snapshotMessageId = pinMsg.message_id;
+      snapshotDate = pinMsg.date ? new Date(pinMsg.date * 1000) : new Date();
 
-    // Check if matching chat_id
-    const msgChatId = String(msg.chat.id);
-    const configChatId = String(config.chatId);
-    if (msgChatId !== configChatId && !configChatId.includes(msgChatId)) {
-      // Continue or check if bot has messages
-    }
-
-    // 1. Check in message text
-    if (msg.text && msg.text.includes('#FINFLOW_DATA_START#')) {
-      const match = msg.text.match(/#FINFLOW_DATA_START#([\s\S]*?)#FINFLOW_DATA_END#/);
-      if (match && match[1]) {
-        try {
+      if (pinMsg.text && pinMsg.text.includes('#FINFLOW_DATA_START#')) {
+        const match = pinMsg.text.match(/#FINFLOW_DATA_START#([\s\S]*?)#FINFLOW_DATA_END#/);
+        if (match && match[1]) {
           foundJson = match[1].trim();
-          snapshotDate = new Date(msg.date * 1000);
-          break;
-        } catch (e) {}
-      }
-    }
-
-    // 2. Check if document attached (finflow_db_*.json)
-    if (msg.document && msg.document.file_name && msg.document.file_name.endsWith('.json')) {
-      try {
-        const fileId = msg.document.file_id;
-        const fileInfoRes = await fetch(`https://api.telegram.org/bot${config.botToken}/getFile?file_id=${fileId}`);
+        }
+      } else if (pinMsg.document && pinMsg.document.file_id) {
+        const fileInfoRes = await fetch(`https://api.telegram.org/bot${config.botToken}/getFile?file_id=${pinMsg.document.file_id}`);
         const fileInfo = await fileInfoRes.json();
-        if (fileInfo.ok && fileInfo.result.file_path) {
+        if (fileInfo.ok && fileInfo.result?.file_path) {
           const fileContentRes = await fetch(`https://api.telegram.org/file/bot${config.botToken}/${fileInfo.result.file_path}`);
           foundJson = await fileContentRes.text();
-          snapshotDate = new Date(msg.date * 1000);
-          break;
         }
-      } catch (e) {
-        console.warn('Failed to fetch document file from Telegram:', e);
       }
+    }
+  } catch (e) {
+    console.warn('Error fetching Telegram pinned message:', e);
+  }
+
+  // 2. FALLBACK LOOKUP: Check getUpdates
+  if (!foundJson) {
+    try {
+      const url = `https://api.telegram.org/bot${config.botToken}/getUpdates?limit=100`;
+      const res = await fetch(url);
+      const result = await res.json();
+      if (result.ok && result.result) {
+        const updates = result.result;
+        for (let i = updates.length - 1; i >= 0; i--) {
+          const msg = updates[i].message || updates[i].channel_post;
+          if (!msg) continue;
+          if (msg.text && msg.text.includes('#FINFLOW_DATA_START#')) {
+            const match = msg.text.match(/#FINFLOW_DATA_START#([\s\S]*?)#FINFLOW_DATA_END#/);
+            if (match && match[1]) {
+              foundJson = match[1].trim();
+              snapshotDate = new Date(msg.date * 1000);
+              snapshotMessageId = msg.message_id;
+              break;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Error fetching Telegram updates fallback:', e);
     }
   }
 
   if (!foundJson) {
-    throw new Error('Tidak ditemukan catatan database FinFlow di riwayat chat Telegram. Silakan lakukan "Simpan Database ke Telegram" terlebih dahulu.');
+    if (isAutoSync) return { skipped: true, reason: 'No snapshot in Telegram' };
+    throw new Error('Tidak ditemukan catatan database FinFlow di Telegram. Silakan lakukan "Simpan ke Telegram" dari perangkat utama terlebih dahulu.');
+  }
+
+  // Check if we already have this exact snapshot imported
+  const lastImportedId = localStorage.getItem(LAST_SYNCED_MSG_ID_KEY);
+  if (isAutoSync && lastImportedId && snapshotMessageId && String(lastImportedId) === String(snapshotMessageId)) {
+    return { skipped: true, reason: 'Already at latest snapshot', snapshotMessageId };
   }
 
   // Import into local database
   await importDatabaseFromJson(foundJson);
-  
+
+  if (snapshotMessageId) {
+    localStorage.setItem(LAST_SYNCED_MSG_ID_KEY, String(snapshotMessageId));
+  }
+
   saveTelegramConfig({
     lastSynced: new Date().toISOString(),
     isConnected: true
@@ -247,6 +292,48 @@ export async function pullDatabaseFromTelegram() {
 
   return {
     success: true,
-    snapshotDate
+    snapshotDate,
+    snapshotMessageId
+  };
+}
+
+// Background auto-sync worker
+export function initTelegramAutoSync({ onDataUpdated }) {
+  let isSyncing = false;
+
+  const runSync = async () => {
+    if (isSyncing) return;
+    try {
+      isSyncing = true;
+      const res = await pullDatabaseFromTelegram(true);
+      if (res && res.success && onDataUpdated) {
+        onDataUpdated(res);
+      }
+    } catch (err) {
+      // Background sync silently catches error
+    } finally {
+      isSyncing = false;
+    }
+  };
+
+  // 1. Initial sync on boot
+  runSync();
+
+  // 2. Sync when browser tab becomes active
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      runSync();
+    }
+  };
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('focus', runSync);
+
+  // 3. Periodic background sync every 30 seconds
+  const intervalId = setInterval(runSync, 30000);
+
+  return () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('focus', runSync);
+    clearInterval(intervalId);
   };
 }

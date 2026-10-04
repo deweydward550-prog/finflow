@@ -11,7 +11,7 @@ import RecurringManagerModal from './components/RecurringManagerModal';
 import SettingsModal from './components/SettingsModal';
 import ConfirmDialog from './components/ConfirmDialog';
 import Toast from './components/Toast';
-import { pushDatabaseToTelegram, getTelegramConfig } from './services/telegramDb';
+import { pushDatabaseToTelegram, getTelegramConfig, initTelegramAutoSync } from './services/telegramDb';
 import { initWhatsAppSync } from './services/whatsappSync';
 import './App.css';
 
@@ -54,17 +54,6 @@ export default function App() {
     }, 4000);
   }, []);
 
-  // Real-time WhatsApp Bot Sync Listener
-  useEffect(() => {
-    const cleanup = initWhatsAppSync({
-      onNewTransactions: (items) => {
-        loadData();
-        showToast(`💬 ${items.length} transaksi baru berhasil diinput dari WhatsApp!`, 'success');
-      }
-    });
-    return cleanup;
-  }, [showToast]);
-
   // Handle URL shortcut parameters from PWA
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -87,13 +76,7 @@ export default function App() {
   // Load all DB data
   const loadData = useCallback(async () => {
     try {
-      const WIPE_KEY = 'finflow_wiped_clean_v1';
-      if (!localStorage.getItem(WIPE_KEY)) {
-        await clearAllDatabaseData();
-        localStorage.setItem(WIPE_KEY, 'true');
-      } else {
-        await seedInitialDataIfEmpty();
-      }
+      await seedInitialDataIfEmpty();
       
       const txs = await db.transactions.toArray();
       const recurring = await db.recurringExpenses.toArray();
@@ -142,7 +125,29 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [selectedMonthYear]);
+  }, []);
+
+  // Real-time Telegram Cloud Sync Listener & Background Worker (Syncs across devices)
+  useEffect(() => {
+    const cleanup = initTelegramAutoSync({
+      onDataUpdated: () => {
+        loadData();
+        showToast('☁️ Data keuangan tersinkronisasi dari Telegram Cloud!', 'info');
+      }
+    });
+    return cleanup;
+  }, [loadData, showToast]);
+
+  // Real-time WhatsApp Bot Sync Listener
+  useEffect(() => {
+    const cleanup = initWhatsAppSync({
+      onNewTransactions: (items) => {
+        loadData();
+        showToast(`💬 ${items.length} transaksi baru berhasil diinput dari WhatsApp!`, 'success');
+      }
+    });
+    return cleanup;
+  }, [loadData, showToast]);
 
   useEffect(() => {
     loadData();

@@ -347,6 +347,7 @@ export async function exportDatabaseToJson() {
   const recurringPayments = await db.recurringPayments.toArray();
   const budgets = await db.budgets.toArray();
   const settings = await db.settings.toArray();
+  const paymentMethods = getCustomPaymentMethods();
 
   const data = {
     version: 1,
@@ -357,7 +358,8 @@ export async function exportDatabaseToJson() {
       recurringExpenses,
       recurringPayments,
       budgets,
-      settings
+      settings,
+      paymentMethods
     }
   };
 
@@ -391,6 +393,10 @@ export async function importDatabaseFromJson(jsonString) {
       await db.settings.bulkAdd(parsed.data.settings);
     }
   });
+
+  if (parsed.data.paymentMethods && Array.isArray(parsed.data.paymentMethods)) {
+    saveCustomPaymentMethods(parsed.data.paymentMethods);
+  }
 }
 
 // Reset database to default sample
