@@ -414,14 +414,6 @@ export default function DailyExpenses({
                       <div className="zen-tx-actions" onClick={(e) => e.stopPropagation()}>
                         <button 
                           type="button" 
-                          className="zen-action-btn"
-                          onClick={() => onEditTransaction(item)}
-                          title="Edit Transaksi"
-                        >
-                          <Edit2 size={13} />
-                        </button>
-                        <button 
-                          type="button" 
                           className="zen-action-btn btn-del"
                           onClick={() => onDeleteTransaction(item)}
                           title="Hapus Transaksi"
