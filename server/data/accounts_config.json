@@ -1,10 +1,10 @@
 {
-  "primaryAccount": "BCA",
+  "primaryAccount": "BSI",
   "accounts": [
     {
       "id": "bca",
       "name": "BCA",
-      "isPrimary": true
+      "isPrimary": false
     },
     {
       "id": "bni",
@@ -19,7 +19,7 @@
     {
       "id": "bsi",
       "name": "BSI",
-      "isPrimary": false
+      "isPrimary": true
     }
   ]
 }

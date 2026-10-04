@@ -144,6 +144,9 @@ export default function App() {
       onNewTransactions: (items) => {
         loadData();
         showToast(`💬 ${items.length} transaksi baru berhasil diinput dari WhatsApp!`, 'success');
+      },
+      onServerDiscovered: (url) => {
+        showToast(`📶 Terhubung otomatis ke Bot Server di Wi-Fi: ${url}`, 'info');
       }
     });
     return cleanup;

@@ -16,7 +16,10 @@ import {
   clearAllDatabaseData, getCustomPaymentMethods, saveCustomPaymentMethods,
   setPrimaryPaymentMethod, DEFAULT_PAYMENT_METHODS
 } from '../db/db';
-import { testSendManualChat, getBotServerUrl, setBotServerUrl, PERMANENT_BOT_URL, LOCAL_WIFI_BOT_URL } from '../services/whatsappSync';
+import { 
+  testSendManualChat, getBotServerUrl, setBotServerUrl, 
+  PERMANENT_BOT_URL, LOCAL_WIFI_BOT_URL, autoDiscoverLocalBotServer 
+} from '../services/whatsappSync';
 
 export default function SettingsModal({
   isOpen,
@@ -48,6 +51,8 @@ export default function SettingsModal({
   const [waServerStatus, setWaServerStatus] = useState({ ok: false, status: 'checking' });
   const [testChatText, setTestChatText] = useState('naspad 13000 / bensin 20.000 / cukur 25k');
   const [isSendingTestChat, setIsSendingTestChat] = useState(false);
+  const [isScanningNetwork, setIsScanningNetwork] = useState(false);
+  const [scanProgressText, setScanProgressText] = useState('');
 
   const refreshWaStatus = async (customUrl) => {
     const urlToUse = (customUrl !== undefined ? customUrl : serverUrlInput) || getBotServerUrl();
@@ -76,6 +81,45 @@ export default function SettingsModal({
   const [methodIsPrimary, setMethodIsPrimary] = useState(false);
 
   const fileInputRef = useRef(null);
+
+  // Listen to auto-discovered server event
+  useEffect(() => {
+    const handleDiscovered = (e) => {
+      if (e.detail?.url) {
+        setServerUrlInput(e.detail.url);
+        refreshWaStatus(e.detail.url);
+      }
+    };
+    window.addEventListener('finflow_bot_server_discovered', handleDiscovered);
+    return () => {
+      window.removeEventListener('finflow_bot_server_discovered', handleDiscovered);
+    };
+  }, []);
+
+  // Scan local Wi-Fi range 192.168.0.0 - 192.168.0.255 ascending
+  const handleScanLocalNetwork = async () => {
+    try {
+      setIsScanningNetwork(true);
+      setScanProgressText('Memulai pencarian IP (192.168.0.1 - 254)...');
+      const foundUrl = await autoDiscoverLocalBotServer((progress) => {
+        if (progress.status) {
+          setScanProgressText(progress.status);
+        }
+      });
+      if (foundUrl) {
+        setServerUrlInput(foundUrl);
+        refreshWaStatus(foundUrl);
+        showToast(`🎯 Ditemukan WhatsApp Bot Server di ${foundUrl}!`, 'success');
+      } else {
+        showToast('⚠️ Tidak ditemukan server bot aktif di rentang IP 192.168.0.0 - 255. Pastikan PC & HP di Wi-Fi yang sama.', 'warning');
+      }
+    } catch (err) {
+      showToast('Gagal memindai jaringan lokal: ' + err.message, 'error');
+    } finally {
+      setIsScanningNetwork(false);
+      setScanProgressText('');
+    }
+  };
 
   // Load configs on open
   useEffect(() => {
@@ -729,8 +773,34 @@ export default function SettingsModal({
 
               {/* Bot Server URL Config */}
               <div className="input-group">
-                <label className="input-label" style={{ margin: 0 }}>Bot Server URL (Pilih Sesuai Jaringan):</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  <label className="input-label" style={{ margin: 0 }}>Bot Server URL (Pilih Sesuai Jaringan):</label>
+                  {isScanningNetwork && (
+                    <span style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <RefreshCw size={11} className="spin" />
+                      {scanProgressText || 'Memindai Wi-Fi...'}
+                    </span>
+                  )}
+                </div>
+
                 <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', margin: '0.25rem 0' }}>
+                  <button
+                    type="button"
+                    className="chip-btn"
+                    onClick={handleScanLocalNetwork}
+                    disabled={isScanningNetwork}
+                    style={{
+                      background: isScanningNetwork ? 'var(--bg-hover)' : 'rgba(16, 185, 129, 0.12)',
+                      borderColor: 'rgba(16, 185, 129, 0.4)',
+                      color: '#059669',
+                      fontWeight: 600
+                    }}
+                    title="Otomatis cari IP PC/server di subnet 192.168.0.0 - 192.168.0.255 mulai dari IP terkecil"
+                  >
+                    <RefreshCw size={11} className={isScanningNetwork ? 'spin' : ''} />
+                    <span>{isScanningNetwork ? '🔍 Sedang Memindai...' : '🔍 Scan Otomatis Wi-Fi (192.168.0.0 - 255)'}</span>
+                  </button>
+
                   <button
                     type="button"
                     className="chip-btn"
@@ -744,6 +814,7 @@ export default function SettingsModal({
                   >
                     📶 Wi-Fi Lokal (192.168.0.2)
                   </button>
+
                   <button
                     type="button"
                     className="chip-btn"
@@ -757,6 +828,7 @@ export default function SettingsModal({
                   >
                     🌐 HTTPS Tunnel Online
                   </button>
+
                   <button
                     type="button"
                     className="chip-btn"
@@ -771,6 +843,7 @@ export default function SettingsModal({
                     💻 Localhost (5051)
                   </button>
                 </div>
+
                 <div className="wa-url-input-row">
                   <input 
                     type="text"
