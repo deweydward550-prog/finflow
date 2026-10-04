@@ -184,20 +184,16 @@ export default function RecurringModal({
                     <button
                       key={m.id}
                       type="button"
-                      className={`method-chip ${isSelected ? 'selected' : ''}`}
+                      className={`method-chip-btn ${isSelected ? 'selected' : ''} ${m.isPrimary ? 'is-primary-chip' : ''}`}
                       onClick={() => setPaymentMethod(m.name)}
                     >
-                      {m.isPrimary ? (
-                        <Star size={13} className="text-warning fill-warning" />
-                      ) : isCash ? (
-                        <Banknote size={13} />
-                      ) : isEwallet ? (
-                        <Smartphone size={13} />
-                      ) : (
-                        <CreditCard size={13} />
-                      )}
+                      {isCash ? <Banknote size={13} /> : isEwallet ? <Smartphone size={13} /> : <CreditCard size={13} />}
                       <span>{m.name}</span>
-                      {m.isPrimary && <span className="text-2xs font-bold opacity-80">(Utama)</span>}
+                      {m.isPrimary && (
+                        <span className="chip-star-tag" title="Rekening Utama">
+                          <Star size={9} fill="currentColor" /> Utama
+                        </span>
+                      )}
                     </button>
                   );
                 })}

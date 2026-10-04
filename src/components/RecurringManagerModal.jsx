@@ -58,6 +58,16 @@ export default function RecurringManagerModal({
               {recurringList.map(item => (
                 <div key={item.id} className="manage-rec-row">
                   <div className="manage-rec-left">
+                    <div 
+                      className="manage-rec-icon"
+                      style={item.color ? {
+                        background: `${item.color}18`,
+                        color: item.color,
+                        borderColor: `${item.color}35`
+                      } : undefined}
+                    >
+                      {getCategoryIcon(item.icon || item.category, 16)}
+                    </div>
                     <div className="manage-rec-info">
                       <span className="manage-rec-title">{item.title}</span>
                       <span className="manage-rec-sub">

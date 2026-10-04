@@ -799,12 +799,32 @@
   flex: 1;
 }
 
+.quest-item-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-main);
+  flex-shrink: 0;
+}
+
+.quest-item-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.1rem;
+}
+
 .quest-due-tag {
-  font-size: 0.675rem;
+  font-size: 0.65rem;
   font-weight: 700;
   color: var(--text-muted);
   background: var(--bg-subtle);
-  padding: 0.15rem 0.4rem;
+  padding: 0.1rem 0.35rem;
   border-radius: var(--radius-sm);
   white-space: nowrap;
   flex-shrink: 0;
@@ -835,6 +855,82 @@
   font-weight: 700;
   color: var(--text-secondary);
   font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Manage Recurring Modal List */
+.manage-rec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.manage-rec-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.85rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  gap: 0.5rem;
+}
+
+.manage-rec-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.manage-rec-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-hairline);
+  color: var(--text-main);
+  flex-shrink: 0;
+}
+
+.manage-rec-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.manage-rec-title {
+  font-size: 0.825rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.manage-rec-sub {
+  font-size: 0.675rem;
+  color: var(--text-muted);
+}
+
+.manage-rec-right {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.manage-rec-amount {
+  font-size: 0.825rem;
+  font-weight: 800;
+  color: var(--expense);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.manage-rec-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
 }
 
 .quest-complete-btn {

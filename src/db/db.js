@@ -313,6 +313,8 @@ export async function markRecurringExpensePaid({ recurring, monthYear, paidDate,
     paymentMethod: finalPaymentMethod,
     notes: `Pembayaran Rutin Bulanan (${recurring.title})`,
     recurringId: recurring.id,
+    icon: recurring.icon || undefined,
+    color: recurring.color || undefined,
     createdAt: new Date().toISOString()
   });
 

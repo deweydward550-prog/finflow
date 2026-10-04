@@ -8,7 +8,7 @@ import confetti from 'canvas-confetti';
 import { getCustomPaymentMethods, getPrimaryPaymentMethod } from '../db/db';
 import { 
   formatRupiah, formatMonthYear, getRecurringDueInfo,
-  formatAmountInput, parseAmountInput 
+  formatAmountInput, parseAmountInput, getCategoryIcon 
 } from '../utils/formatters';
 
 export default function MonthlyQuests({
@@ -357,12 +357,24 @@ export default function MonthlyQuests({
                     className={`quest-item-card ${isAnimating ? 'quest-item-completing' : ''}`}
                   >
                     <div className="quest-item-left">
-                      <span className={`quest-due-tag ${isOverdue ? 'due-overdue' : ''}`}>
-                        Tgl {item.dueDay}
-                      </span>
+                      <div 
+                        className="quest-item-icon-wrap"
+                        style={item.color ? {
+                          background: `${item.color}18`,
+                          color: item.color,
+                          borderColor: `${item.color}35`
+                        } : undefined}
+                      >
+                        {getCategoryIcon(item.icon || item.category, 15)}
+                      </div>
                       <div className="quest-item-info">
                         <span className="quest-item-name">{item.title}</span>
-                        <span className="quest-item-amount">{formatRupiah(item.amount)}</span>
+                        <div className="quest-item-meta-row">
+                          <span className={`quest-due-tag ${isOverdue ? 'due-overdue' : ''}`}>
+                            Tgl {item.dueDay}
+                          </span>
+                          <span className="quest-item-amount">{formatRupiah(item.amount)}</span>
+                        </div>
                       </div>
                     </div>
 

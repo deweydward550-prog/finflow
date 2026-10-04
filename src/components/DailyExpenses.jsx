@@ -44,6 +44,38 @@ export default function DailyExpenses({
     return () => window.removeEventListener('finflow_payment_methods_updated', handleUpdate);
   }, []);
 
+  // Map of recurring templates for instant icon & color lookup
+  const recurringMap = useMemo(() => {
+    const map = new Map();
+    if (Array.isArray(recurringList)) {
+      recurringList.forEach(r => {
+        if (r && r.id) map.set(r.id, r);
+      });
+    }
+    return map;
+  }, [recurringList]);
+
+  // Resolve visual icon & color for transaction
+  const getItemVisual = (item) => {
+    if (item.icon) {
+      return {
+        icon: item.icon,
+        color: item.color || null
+      };
+    }
+    if (item.recurringId && recurringMap.has(item.recurringId)) {
+      const rec = recurringMap.get(item.recurringId);
+      return {
+        icon: rec.icon || item.category,
+        color: rec.color || null
+      };
+    }
+    return {
+      icon: item.category,
+      color: null
+    };
+  };
+
   // Compute breakdown per account / payment method (excluding cash)
   const accountBalances = useMemo(() => {
     return paymentMethodsList
@@ -309,16 +341,25 @@ export default function DailyExpenses({
 
               {/* Transactions List */}
               <div className="zen-items-list">
-                {group.items.map(item => (
-                  <div 
-                    key={item.id} 
-                    className="zen-tx-row"
-                    onClick={() => onEditTransaction(item)}
-                  >
-                    <div className="zen-tx-left">
-                      <div className="zen-tx-icon">
-                        {getCategoryIcon(item.category, 16)}
-                      </div>
+                {group.items.map(item => {
+                  const visual = getItemVisual(item);
+                  return (
+                    <div 
+                      key={item.id} 
+                      className="zen-tx-row"
+                      onClick={() => onEditTransaction(item)}
+                    >
+                      <div className="zen-tx-left">
+                        <div 
+                          className="zen-tx-icon"
+                          style={visual.color ? {
+                            background: `${visual.color}15`,
+                            color: visual.color,
+                            borderColor: `${visual.color}35`
+                          } : undefined}
+                        >
+                          {getCategoryIcon(visual.icon, 16)}
+                        </div>
 
                       <div className="zen-tx-details">
                         <span className="zen-tx-title">{item.title}</span>
@@ -364,8 +405,9 @@ export default function DailyExpenses({
                         </button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))
