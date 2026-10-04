@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "bot": "node server/bot.js",
+    "tunnel": "npx localtunnel --port 5051",
     "server": "node server/bot.js",
     "build": "vite build",
     "lint": "oxlint",

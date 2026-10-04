@@ -20,6 +20,7 @@ const PORT = 5051;
 const DATA_DIR = path.join(__dirname, 'data');
 const AUTH_DIR = path.join(__dirname, 'auth_info_baileys');
 const PENDING_FILE = path.join(DATA_DIR, 'pending_transactions.json');
+const TELEGRAM_CONFIG_FILE = path.join(DATA_DIR, 'telegram_config.json');
 
 // Ensure directories exist
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -43,6 +44,30 @@ function savePendingTransactions(list) {
     fs.writeFileSync(PENDING_FILE, JSON.stringify(list, null, 2), 'utf8');
   } catch (err) {
     console.error('Error saving pending file:', err);
+  }
+}
+
+// Read / Write Telegram Bot config for direct cloud sync
+function getTelegramConfig() {
+  try {
+    if (fs.existsSync(TELEGRAM_CONFIG_FILE)) {
+      const data = fs.readFileSync(TELEGRAM_CONFIG_FILE, 'utf8');
+      return JSON.parse(data) || {};
+    }
+  } catch (err) {
+    console.error('Error reading telegram config:', err);
+  }
+  return {};
+}
+
+function saveTelegramConfig(config) {
+  try {
+    const current = getTelegramConfig();
+    const updated = { ...current, ...config };
+    fs.writeFileSync(TELEGRAM_CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf8');
+    return updated;
+  } catch (err) {
+    console.error('Error saving telegram config:', err);
   }
 }
 
@@ -93,17 +118,77 @@ function broadcastNewTransactions(transactions) {
   });
 }
 
+// Push directly to Telegram Bot Cloud DB
+async function pushToTelegramDirectly(transactions) {
+  try {
+    const tg = getTelegramConfig();
+    if (!tg.botToken || !tg.chatId) return false;
+
+    const nowStr = new Date().toLocaleString('id-ID', {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    });
+
+    let totalExpense = 0;
+    let totalIncome = 0;
+    const lines = transactions.map((t, idx) => {
+      const emoji = CATEGORY_EMOJI[t.category] || '💸';
+      if (t.type === 'income') {
+        totalIncome += t.amount;
+        return `${idx + 1}. ${emoji} *${t.title}* — +${formatRupiahSimple(t.amount)}`;
+      } else {
+        totalExpense += t.amount;
+        return `${idx + 1}. ${emoji} *${t.title}* — ${formatRupiahSimple(t.amount)}`;
+      }
+    });
+
+    const text = `💬 *FinFlow: Transaksi Baru dari WhatsApp*\n` +
+      `🕒 *Waktu*: ${nowStr}\n\n` +
+      lines.join('\n') +
+      `\n\n💰 *Total Pengeluaran*: ${formatRupiahSimple(totalExpense)}` +
+      `\n\n⚡ _Tersinkronisasi otomatis dari WhatsApp Bot Lokal_`;
+
+    const url = `https://api.telegram.org/bot${tg.botToken}/sendMessage`;
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: tg.chatId,
+        text,
+        parse_mode: 'Markdown'
+      })
+    });
+    console.log('☁️ [Telegram] Berhasil mengirim notifikasi & data ke Telegram Cloud DB!');
+    return true;
+  } catch (err) {
+    console.error('Failed to push directly to Telegram:', err);
+    return false;
+  }
+}
+
 // REST API Endpoints
 app.get('/api/status', (req, res) => {
   const pending = getPendingTransactions();
+  const tg = getTelegramConfig();
   res.json({
     ok: true,
     status: botStatus,
     botNumber,
     hasQR: !!currentQR,
     qr: currentQR,
-    pendingCount: pending.length
+    pendingCount: pending.length,
+    telegramConfigured: !!(tg.botToken && tg.chatId)
   });
+});
+
+// Configure Telegram Bot credentials for direct cloud bridge
+app.post('/api/telegram-config', (req, res) => {
+  const { botToken, chatId, autoSync } = req.body;
+  if (botToken && chatId) {
+    saveTelegramConfig({ botToken, chatId, autoSync });
+    console.log('✅ [Server] Telegram Cloud DB credentials tersimpan di server lokal.');
+  }
+  res.json({ ok: true, message: 'Telegram config updated' });
 });
 
 // SSE Live Stream for Realtime Frontend Sync
@@ -135,7 +220,7 @@ app.post('/api/pending/ack', (req, res) => {
 });
 
 // Manual test endpoint (e.g. from browser or postman)
-app.post('/api/manual-test', (req, res) => {
+app.post('/api/manual-test', async (req, res) => {
   const { message, paymentMethod = 'BCA' } = req.body;
   if (!message) return res.status(400).json({ ok: false, error: 'Message is required' });
 
@@ -145,6 +230,7 @@ app.post('/api/manual-test', (req, res) => {
     const updated = [...existing, ...parsed];
     savePendingTransactions(updated);
     broadcastNewTransactions(parsed);
+    await pushToTelegramDirectly(parsed);
   }
 
   res.json({ ok: true, parsed, count: parsed.length });
@@ -233,6 +319,9 @@ async function startWhatsAppBot() {
           // Broadcast in real-time to FinFlow web app
           broadcastNewTransactions(parsedItems);
 
+          // Direct cloud sync to Telegram
+          await pushToTelegramDirectly(parsedItems);
+
           // Build a neat WhatsApp response receipt
           let totalExpense = 0;
           let totalIncome = 0;
@@ -268,7 +357,7 @@ async function startWhatsAppBot() {
             `\n\n───────────────────\n` +
             `${summarySection}\n` +
             `📅 *Tanggal:* ${nowStr}\n` +
-            `⚡ *Status:* Otomatis tersinkron ke aplikasi`;
+            `⚡ *Status:* Otomatis tersinkron ke aplikasi & Telegram`;
 
           // Send confirmation back to WhatsApp
           try {

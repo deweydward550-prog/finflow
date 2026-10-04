@@ -16,7 +16,7 @@ import {
   clearAllDatabaseData, getCustomPaymentMethods, saveCustomPaymentMethods,
   setPrimaryPaymentMethod, DEFAULT_PAYMENT_METHODS
 } from '../db/db';
-import { testSendManualChat } from '../services/whatsappSync';
+import { testSendManualChat, getBotServerUrl, setBotServerUrl } from '../services/whatsappSync';
 
 export default function SettingsModal({
   isOpen,
@@ -44,9 +44,25 @@ export default function SettingsModal({
   const [showGuide, setShowGuide] = useState(false);
 
   // WhatsApp Bot State
+  const [serverUrlInput, setServerUrlInput] = useState(() => getBotServerUrl());
   const [waServerStatus, setWaServerStatus] = useState({ ok: false, status: 'checking' });
   const [testChatText, setTestChatText] = useState('naspad 13000 / bensin 20.000 / cukur 25k');
   const [isSendingTestChat, setIsSendingTestChat] = useState(false);
+
+  const refreshWaStatus = async (customUrl) => {
+    const urlToUse = (customUrl !== undefined ? customUrl : serverUrlInput) || getBotServerUrl();
+    try {
+      const res = await fetch(`${urlToUse}/api/status`);
+      if (res.ok) {
+        const data = await res.json();
+        setWaServerStatus(data);
+        return;
+      }
+    } catch {
+      // Offline / blocked
+    }
+    setWaServerStatus({ ok: false, status: 'offline' });
+  };
 
   // Payment Methods State
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -71,10 +87,9 @@ export default function SettingsModal({
     setPaymentMethods(getCustomPaymentMethods());
 
     // Check WhatsApp Server Status
-    fetch('http://localhost:5051/api/status')
-      .then(r => r.json())
-      .then(d => setWaServerStatus(d))
-      .catch(() => setWaServerStatus({ ok: false, status: 'offline' }));
+    const currentUrl = getBotServerUrl();
+    setServerUrlInput(currentUrl);
+    refreshWaStatus(currentUrl);
   }, [isOpen]);
 
   // Test WhatsApp Chat Input
@@ -91,7 +106,7 @@ export default function SettingsModal({
         showToast('Gagal memproses pesan chat: format tidak valid', 'error');
       }
     } catch (err) {
-      showToast('Gagal terhubung ke Bot Server: Pastikan server aktif (npm run bot)', 'error');
+      showToast('Gagal terhubung ke Bot Server: Pastikan server aktif (npm run bot) atau periksa Server URL', 'error');
     } finally {
       setIsSendingTestChat(false);
     }
@@ -667,11 +682,11 @@ export default function SettingsModal({
               <div className="tg-section-header">
                 <div className="tg-title-wrap">
                   <MessageCircle size={18} className="text-inc" />
-                  <h4 className="settings-section-title">WhatsApp Bot Server (Lokal)</h4>
+                  <h4 className="settings-section-title">WhatsApp Bot Server</h4>
                 </div>
 
                 <span className={`badge ${waServerStatus.status === 'connected' ? 'badge-success' : waServerStatus.status === 'qr' ? 'badge-warning' : 'badge-neutral'}`}>
-                  {waServerStatus.status === 'connected' ? '🟢 Bot Aktif' : waServerStatus.status === 'qr' ? '🟡 Menunggu Scan QR' : '⚪ Server Offline'}
+                  {waServerStatus.status === 'connected' ? '🟢 Bot Aktif' : waServerStatus.status === 'qr' ? '🟡 Menunggu Scan QR' : '⚪ Server Offline / Belum Terhubung'}
                 </span>
               </div>
 
@@ -679,11 +694,72 @@ export default function SettingsModal({
                 Catat pengeluaran cukup dengan mengirim chat ke WhatsApp Anda sendiri atau bot. Server berjalan di komputer lokal Anda (Port 5051).
               </p>
 
+              {/* HTTPS / Vercel Tunnel Notice */}
+              {window.location.protocol === 'https:' && (
+                <div className="wa-https-banner">
+                  <div className="wa-https-header">
+                    <Cloud size={15} className="text-primary" />
+                    <strong>Menghubungkan Bot Lokal ke FinFlow Vercel (HTTPS)</strong>
+                  </div>
+                  <p className="text-2xs text-muted leading-relaxed mt-1">
+                    Karena Vercel berjalan di <strong>HTTPS</strong>, browser membatasi koneksi HTTP lokal. Agar Vercel dapat menerima data real-time, jalankan perintah tunnel ini di terminal komputer Anda:
+                  </p>
+                  <div className="wa-cmd-code-row mt-1">
+                    <code>npm run tunnel</code>
+                    <button 
+                      type="button" 
+                      className="btn-copy-cmd" 
+                      onClick={() => {
+                        navigator.clipboard.writeText('npm run tunnel');
+                        showToast('Perintah "npm run tunnel" disalin ke clipboard!', 'info');
+                      }}
+                      title="Salin Perintah Tunnel"
+                    >
+                      <Copy size={12} />
+                      <span>Salin</span>
+                    </button>
+                  </div>
+                  <p className="text-2xs text-muted mt-1">
+                    Salin URL HTTPS yang dihasilkan (misal: <code>https://xxx.localtunnel.me</code>) lalu tempel ke kolom <strong>Server URL</strong> di bawah.
+                  </p>
+                </div>
+              )}
+
+              {/* Bot Server URL Config */}
+              <div className="input-group">
+                <label className="input-label">Bot Server URL (Lokal / Tunnel)</label>
+                <div className="wa-url-input-row">
+                  <input 
+                    type="text"
+                    className="input-control font-mono text-xs"
+                    placeholder="http://localhost:5051 atau https://xxx.localtunnel.me"
+                    value={serverUrlInput}
+                    onChange={(e) => setServerUrlInput(e.target.value)}
+                    onBlur={() => {
+                      setBotServerUrl(serverUrlInput);
+                      refreshWaStatus(serverUrlInput);
+                    }}
+                  />
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      setBotServerUrl(serverUrlInput);
+                      refreshWaStatus(serverUrlInput);
+                      showToast('Server URL disimpan & status diperbarui', 'info');
+                    }}
+                  >
+                    <RefreshCw size={12} />
+                    <span>Cek</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Command Box to Run Server */}
               <div className="wa-cmd-box">
                 <div className="wa-cmd-label">
                   <Terminal size={13} className="text-muted" />
-                  <span>Perintah Menjalankan Bot Server di Terminal:</span>
+                  <span>Perintah Menjalankan Bot Server di Komputer:</span>
                 </div>
                 <div className="wa-cmd-code-row">
                   <code>npm run bot</code>

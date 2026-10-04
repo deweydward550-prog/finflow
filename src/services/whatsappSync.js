@@ -1,19 +1,55 @@
 import { db } from '../db/db';
 import { pushDatabaseToTelegram, getTelegramConfig } from './telegramDb';
 
-const BOT_SERVER_URL = 'http://localhost:5051';
+export function getBotServerUrl() {
+  const saved = localStorage.getItem('finflow_wa_server_url');
+  if (saved && saved.trim()) return saved.trim().replace(/\/+$/, '');
+  return 'http://localhost:5051';
+}
+
+export function setBotServerUrl(url) {
+  if (!url || !url.trim()) {
+    localStorage.removeItem('finflow_wa_server_url');
+  } else {
+    localStorage.setItem('finflow_wa_server_url', url.trim().replace(/\/+$/, ''));
+  }
+}
 
 let eventSource = null;
 let pollInterval = null;
 
 export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
+  const serverUrl = getBotServerUrl();
+
+  // Sync Telegram credentials to local bot server so bot can push directly to Telegram
+  const syncTelegramCredentialsToBot = async () => {
+    try {
+      const tgConfig = getTelegramConfig();
+      if (tgConfig.botToken && tgConfig.chatId) {
+        await fetch(`${serverUrl}/api/telegram-config`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            botToken: tgConfig.botToken,
+            chatId: tgConfig.chatId,
+            autoSync: tgConfig.autoSync
+          })
+        });
+      }
+    } catch {
+      // Ignore if bot server is unreachable
+    }
+  };
+
   // 1. Initial status check
   const checkStatus = async () => {
     try {
-      const res = await fetch(`${BOT_SERVER_URL}/api/status`);
+      const currentUrl = getBotServerUrl();
+      const res = await fetch(`${currentUrl}/api/status`);
       if (res.ok) {
         const data = await res.json();
         onStatusChange?.(data);
+        syncTelegramCredentialsToBot();
         return true;
       }
     } catch {
@@ -27,13 +63,13 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
   // 2. Fetch pending transactions helper
   const fetchPending = async () => {
     try {
-      const res = await fetch(`${BOT_SERVER_URL}/api/pending`);
+      const currentUrl = getBotServerUrl();
+      const res = await fetch(`${currentUrl}/api/pending`);
       if (res.ok) {
         const { data } = await res.json();
         if (Array.isArray(data) && data.length > 0) {
           // Import to Dexie DB
           for (const item of data) {
-            // Check if already exists by id
             const existing = await db.transactions.where('id').equals(item.id).first();
             if (!existing) {
               await db.transactions.add({
@@ -51,7 +87,7 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
           }
 
           // Clear server queue
-          await fetch(`${BOT_SERVER_URL}/api/pending/ack`, { method: 'POST' });
+          await fetch(`${currentUrl}/api/pending/ack`, { method: 'POST' });
 
           // Notify frontend
           onNewTransactions?.(data);
@@ -68,7 +104,7 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
         }
       }
     } catch {
-      // Server not running, ignore
+      // Server not running or blocked, ignore
     }
   };
 
@@ -79,7 +115,8 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
     }
 
     try {
-      eventSource = new EventSource(`${BOT_SERVER_URL}/api/stream`);
+      const currentUrl = getBotServerUrl();
+      eventSource = new EventSource(`${currentUrl}/api/stream`);
 
       eventSource.onopen = () => {
         onStatusChange?.({ ok: true, status: 'connected' });
@@ -91,21 +128,24 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
           const parsed = JSON.parse(event.data);
           if (parsed.type === 'NEW_TRANSACTIONS' && Array.isArray(parsed.payload)) {
             for (const item of parsed.payload) {
-              await db.transactions.add({
-                title: item.title,
-                amount: item.amount,
-                type: item.type || 'expense',
-                category: item.category || 'Pengeluaran Lainnya',
-                paymentMethod: item.paymentMethod || 'BCA',
-                date: item.date,
-                time: item.time || '12:00',
-                notes: item.notes || 'Input otomatis via WhatsApp Bot',
-                createdAt: item.createdAt || new Date().toISOString()
-              });
+              const existing = await db.transactions.where('id').equals(item.id).first();
+              if (!existing) {
+                await db.transactions.add({
+                  title: item.title,
+                  amount: item.amount,
+                  type: item.type || 'expense',
+                  category: item.category || 'Pengeluaran Lainnya',
+                  paymentMethod: item.paymentMethod || 'BCA',
+                  date: item.date,
+                  time: item.time || '12:00',
+                  notes: item.notes || 'Input otomatis via WhatsApp Bot',
+                  createdAt: item.createdAt || new Date().toISOString()
+                });
+              }
             }
 
             // Clear server queue
-            fetch(`${BOT_SERVER_URL}/api/pending/ack`, { method: 'POST' }).catch(() => {});
+            fetch(`${getBotServerUrl()}/api/pending/ack`, { method: 'POST' }).catch(() => {});
 
             onNewTransactions?.(parsed.payload);
 
@@ -151,7 +191,8 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
 }
 
 export async function testSendManualChat(messageText, paymentMethod = 'BCA') {
-  const res = await fetch(`${BOT_SERVER_URL}/api/manual-test`, {
+  const currentUrl = getBotServerUrl();
+  const res = await fetch(`${currentUrl}/api/manual-test`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: messageText, paymentMethod })
