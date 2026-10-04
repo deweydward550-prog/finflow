@@ -1,0 +1,25 @@
+{
+  "primaryAccount": "BSI",
+  "accounts": [
+    {
+      "id": "bca",
+      "name": "BCA",
+      "isPrimary": false
+    },
+    {
+      "id": "bni",
+      "name": "BNI",
+      "isPrimary": false
+    },
+    {
+      "id": "shopeepay",
+      "name": "SeaBank",
+      "isPrimary": false
+    },
+    {
+      "id": "pm_1791069535173",
+      "name": "BSI",
+      "isPrimary": true
+    }
+  ]
+}

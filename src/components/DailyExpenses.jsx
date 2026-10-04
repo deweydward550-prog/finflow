@@ -306,7 +306,6 @@ export default function DailyExpenses({
               {/* Transactions List */}
               <div className="zen-day-items">
                 {group.items.map(item => {
-                  const IconComp = getCategoryIcon(item.category);
                   return (
                     <div 
                       key={item.id} 
@@ -315,7 +314,7 @@ export default function DailyExpenses({
                     >
                       <div className="zen-item-left">
                         <div className={`zen-item-icon ${item.type === 'income' ? 'income-icon' : 'expense-icon'}`}>
-                          <IconComp size={16} />
+                          {getCategoryIcon(item.category, 16)}
                         </div>
 
                         <div className="zen-item-details">
