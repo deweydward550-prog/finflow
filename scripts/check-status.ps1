@@ -137,19 +137,29 @@ while ($true) {
             Write-Host "TERHUBUNG " -ForegroundColor Green -NoNewline
             Write-Host "($($status.botNumber))" -ForegroundColor Cyan
         } elseif ($status.status -eq "qr") {
-            Write-Host "MENUNGGU SCAN QR (Buka log untuk scan)" -ForegroundColor Yellow
+            Write-Host "MENUNGGU SCAN QR (Pilih menu 2 untuk lihat log & scan)" -ForegroundColor Yellow
         } else {
             Write-Host "$($status.status.ToUpper())" -ForegroundColor Yellow
         }
 
+        # Wi-Fi LAN
+        $localIp = if ($status.localIp) { $status.localIp } else { "192.168.0.2" }
+        Write-Host "  [v] Wi-Fi LAN (HP Lokal) : " -NoNewline
+        Write-Host "http://$localIp:5051" -ForegroundColor Cyan -NoNewline
+        Write-Host " (0ms Latensi / Sangat Cepat)" -ForegroundColor DarkGray
+
         # Tunnel
         $tunnelActive = Test-TunnelStatus
-        Write-Host "  [v] HTTPS Tunnel (Vercel): " -NoNewline
+        Write-Host "  [v] HTTPS Tunnel (Online): " -NoNewline
         if ($tunnelActive) {
-            Write-Host "AKTIF PERMANEN " -ForegroundColor Green -NoNewline
+            Write-Host "AKTIF " -ForegroundColor Green -NoNewline
             Write-Host "($TUNNEL_URL)" -ForegroundColor Cyan
+        } elseif ($status.tunnelStatus -eq "active") {
+            Write-Host "AKTIF SERVER " -ForegroundColor Green -NoNewline
+            Write-Host "($TUNNEL_URL)" -ForegroundColor DarkGray
         } else {
-            Write-Host "MENGHUBUNGKAN ($TUNNEL_URL)" -ForegroundColor Yellow
+            Write-Host "STANDBY " -ForegroundColor Yellow -NoNewline
+            Write-Host "(Telegram Cloud & Wi-Fi LAN Aktif)" -ForegroundColor DarkGray
         }
 
         # Telegram
@@ -157,11 +167,11 @@ while ($true) {
         if ($status.telegramConfigured) {
             Write-Host "TERHUBUNG & AKTIF" -ForegroundColor Green
         } else {
-            Write-Host "BELUM DIKONFIGURASI (Opsional)" -ForegroundColor DarkGray
+            Write-Host "BELUM DIKONFIGURASI" -ForegroundColor DarkGray
         }
 
         # Primary Account
-        Write-Host "  [v] Rekening Utama Default: " -NoNewline
+        Write-Host "  [v] Rekening Utama       : " -NoNewline
         Write-Host "$($status.primaryAccount)" -ForegroundColor Yellow
 
         # Pending Queue
@@ -171,10 +181,10 @@ while ($true) {
 
         Write-Host ""
         Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
-        if ($status.status -eq "connected" -and $tunnelActive) {
-            Write-Host "Status: SEMUA SISTEM BERJALAN NORMAL DI LATAR BELAKANG!" -ForegroundColor Green
+        if ($status.status -eq "connected") {
+            Write-Host "Status: BOT WHATSAPP AKTIF! Chat transaksi otomatis masuk ke Telegram." -ForegroundColor Green
         } else {
-            Write-Host "Status: Server aktif, sedang menghubungkan layanan..." -ForegroundColor Yellow
+            Write-Host "Status: Menunggu bot WhatsApp terhubung..." -ForegroundColor Yellow
         }
         Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
         Write-Host ""

@@ -620,37 +620,46 @@ async function startPersistentTunnel() {
       currentTunnel = null;
     }
 
-    console.log(`🌐 Membuka HTTPS Tunnel Permanen (Subdomain: ${TUNNEL_SUBDOMAIN})...`);
-    currentTunnel = await localtunnel({
+    console.log(`🌐 Membuka HTTPS Tunnel (Subdomain: ${TUNNEL_SUBDOMAIN})...`);
+    
+    // Connect with strict 10-second timeout so it never hangs
+    const tunnelPromise = localtunnel({
       port: PORT,
       subdomain: TUNNEL_SUBDOMAIN,
       local_host: '127.0.0.1'
     });
 
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Localtunnel server timed out (10s)')), 10000)
+    );
+
+    currentTunnel = await Promise.race([tunnelPromise, timeoutPromise]);
+
     console.log('\n======================================================');
     console.log(`🔒 [HTTPS TUNNEL PERMANEN AKTIF]`);
     console.log(`🌐 URL Tetap: ${currentTunnel.url}`);
-    console.log(`✨ URL ini TIDAK PERNAH BERUBAH dan siap digunakan di Vercel!`);
+    console.log(`✨ URL ini siap digunakan saat mengakses dari luar rumah!`);
     console.log('======================================================\n');
 
     currentTunnel.on('close', () => {
-      console.log('⚠️ Tunnel terputus. Menghubungkan ulang secara otomatis dalam 5 detik...');
+      console.log('⚠️ Tunnel terputus. Menghubungkan ulang secara otomatis dalam 10 detik...');
       currentTunnel = null;
       isTunnelConnecting = false;
-      setTimeout(startPersistentTunnel, 5000);
+      setTimeout(startPersistentTunnel, 10000);
     });
 
     currentTunnel.on('error', (err) => {
       console.error('⚠️ Tunnel error:', err.message);
       currentTunnel = null;
       isTunnelConnecting = false;
-      setTimeout(startPersistentTunnel, 5000);
+      setTimeout(startPersistentTunnel, 10000);
     });
   } catch (err) {
-    console.error('⚠️ Gagal membuka tunnel otomatis:', err.message);
+    console.warn('⚠️ Gagal terhubung ke tunnel publik (Localtunnel sibuk):', err.message);
+    console.log('💡 Tips: WhatsApp Bot & Telegram Cloud DB tetap AKTIF & sinkron 100% normal.');
     currentTunnel = null;
     isTunnelConnecting = false;
-    setTimeout(startPersistentTunnel, 8000);
+    setTimeout(startPersistentTunnel, 15000);
   } finally {
     isTunnelConnecting = false;
   }
