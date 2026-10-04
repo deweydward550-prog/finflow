@@ -274,28 +274,26 @@ export default function DailyExpenses({
       </div>
 
       {/* 4. Zen Daily Stream */}
-      <div className="zen-stream-list">
+      <div className="zen-groups-container">
         {groupedTransactions.length === 0 ? (
-          <div className="zen-empty-state">
+          <div className="zen-empty">
             <div className="zen-empty-icon">🍃</div>
             <p className="zen-empty-title">Belum ada catatan transaksi</p>
             <p className="zen-empty-subtitle">Kirim pesan di WhatsApp atau klik tombol + untuk mencatat</p>
           </div>
         ) : (
           groupedTransactions.map(group => (
-            <div key={group.date} className="zen-day-group">
+            <div key={group.date} className="zen-date-group">
               {/* Day Header */}
-              <div className="zen-day-header">
-                <div className="zen-day-title-wrap">
-                  <span className="zen-day-relative">{getRelativeDayLabel(group.date)}</span>
-                </div>
+              <div className="zen-group-header">
+                <span className="zen-group-day">{getRelativeDayLabel(group.date)}</span>
 
-                <div className="zen-day-total">
+                <div className="zen-group-total">
                   {group.totalIncome > 0 && (
                     <span className="text-inc font-mono">+{formatRupiah(group.totalIncome, false)}</span>
                   )}
                   {group.totalIncome > 0 && group.totalExpense > 0 && (
-                    <span className="zen-day-total-sep">•</span>
+                    <span className="zen-sub-dot">•</span>
                   )}
                   {group.totalExpense > 0 && (
                     <span className="text-exp font-mono">-{formatRupiah(group.totalExpense, false)}</span>
@@ -304,66 +302,64 @@ export default function DailyExpenses({
               </div>
 
               {/* Transactions List */}
-              <div className="zen-day-items">
-                {group.items.map(item => {
-                  return (
-                    <div 
-                      key={item.id} 
-                      className="zen-item-card"
-                      onClick={() => onEditTransaction(item)}
-                    >
-                      <div className="zen-item-left">
-                        <div className={`zen-item-icon ${item.type === 'income' ? 'income-icon' : 'expense-icon'}`}>
-                          {getCategoryIcon(item.category, 16)}
-                        </div>
-
-                        <div className="zen-item-details">
-                          <span className="zen-item-title">{item.title}</span>
-                          <div className="zen-item-meta">
-                            <span>{item.category}</span>
-                            {item.paymentMethod && (
-                              <>
-                                <span className="zen-meta-dot">•</span>
-                                <span className="zen-meta-payment">{item.paymentMethod}</span>
-                              </>
-                            )}
-                            {item.notes && (
-                              <>
-                                <span className="zen-meta-dot">•</span>
-                                <span className="zen-meta-notes">{item.notes}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
+              <div className="zen-items-list">
+                {group.items.map(item => (
+                  <div 
+                    key={item.id} 
+                    className="zen-tx-row"
+                    onClick={() => onEditTransaction(item)}
+                  >
+                    <div className="zen-tx-left">
+                      <div className="zen-tx-icon">
+                        {getCategoryIcon(item.category, 16)}
                       </div>
 
-                      <div className="zen-item-right">
-                        <span className={`zen-item-amount font-mono ${item.type === 'income' ? 'text-inc' : 'text-exp'}`}>
-                          {item.type === 'income' ? '+' : '-'}{formatRupiah(item.amount)}
-                        </span>
-
-                        <div className="zen-item-actions" onClick={(e) => e.stopPropagation()}>
-                          <button 
-                            type="button" 
-                            className="zen-item-action-btn"
-                            onClick={() => onEditTransaction(item)}
-                            title="Edit Transaksi"
-                          >
-                            <Edit2 size={13} />
-                          </button>
-                          <button 
-                            type="button" 
-                            className="zen-item-action-btn delete-btn"
-                            onClick={() => onDeleteTransaction(item)}
-                            title="Hapus Transaksi"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                      <div className="zen-tx-details">
+                        <span className="zen-tx-title">{item.title}</span>
+                        <div className="zen-tx-meta">
+                          <span>{item.category}</span>
+                          {item.paymentMethod && (
+                            <>
+                              <span className="zen-meta-dot">•</span>
+                              <span className="zen-meta-payment">{item.paymentMethod}</span>
+                            </>
+                          )}
+                          {item.notes && (
+                            <>
+                              <span className="zen-meta-dot">•</span>
+                              <span className="zen-meta-notes">{item.notes}</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
-                  );
-                })}
+
+                    <div className="zen-tx-right">
+                      <span className={`zen-tx-amount font-mono ${item.type === 'income' ? 'text-inc' : 'text-exp'}`}>
+                        {item.type === 'income' ? '+' : '-'}{formatRupiah(item.amount)}
+                      </span>
+
+                      <div className="zen-tx-actions" onClick={(e) => e.stopPropagation()}>
+                        <button 
+                          type="button" 
+                          className="zen-action-btn"
+                          onClick={() => onEditTransaction(item)}
+                          title="Edit Transaksi"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button 
+                          type="button" 
+                          className="zen-action-btn btn-del"
+                          onClick={() => onDeleteTransaction(item)}
+                          title="Hapus Transaksi"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))
