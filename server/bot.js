@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
 import pino from 'pino';
 import qrcode from 'qrcode-terminal';
@@ -49,6 +50,19 @@ console.error = (...args) => {
   appendLog('[ERROR] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
 };
 
+// Get Local Network IP (for zero-latency direct Wi-Fi sync)
+function getLocalNetworkIp() {
+  const ifaces = os.networkInterfaces();
+  for (const dev in ifaces) {
+    for (const details of ifaces[dev]) {
+      if (details.family === 'IPv4' && !details.internal) {
+        return details.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
 // Read / Write pending transactions
 function getPendingTransactions() {
   try {
@@ -80,7 +94,11 @@ function getTelegramConfig() {
   } catch (err) {
     console.error('Error reading telegram config:', err);
   }
-  return {};
+  return {
+    botToken: '8732879033:AAFtR0soqSR0LYXfsMaxpm5JbQVH9xbc714',
+    chatId: '372613511',
+    autoSync: true
+  };
 }
 
 function saveTelegramConfig(config) {
@@ -123,6 +141,7 @@ let botStatus = 'starting'; // 'qr' | 'connecting' | 'connected' | 'disconnected
 let currentQR = null;
 let botNumber = null;
 let sock = null;
+let isReconnecting = false;
 const sseClients = new Set();
 
 // Format Rupiah helper
@@ -169,7 +188,7 @@ function broadcastNewTransactions(transactions) {
   });
 }
 
-// Push directly to Telegram Bot Cloud DB
+// Push directly to Telegram Bot Cloud DB and update snapshot
 async function pushToTelegramDirectly(transactions) {
   try {
     const tg = getTelegramConfig();
@@ -194,11 +213,11 @@ async function pushToTelegramDirectly(transactions) {
       }
     });
 
-    const text = `💬 *FinFlow: Transaksi Baru dari WhatsApp*\n` +
+    const summaryText = `💬 *FinFlow: Transaksi Baru dari WhatsApp*\n` +
       `🕒 *Waktu*: ${nowStr}\n\n` +
       lines.join('\n') +
       `\n\n💰 *Total Pengeluaran*: ${formatRupiahSimple(totalExpense)}` +
-      `\n\n⚡ _Tersinkronisasi otomatis dari WhatsApp Bot Lokal_`;
+      `\n\n⚡ _Tersinkronisasi otomatis dari WhatsApp Bot Server_`;
 
     const url = `https://api.telegram.org/bot${tg.botToken}/sendMessage`;
     await fetch(url, {
@@ -206,15 +225,100 @@ async function pushToTelegramDirectly(transactions) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: tg.chatId,
-        text,
+        text: summaryText,
         parse_mode: 'Markdown'
       })
     });
-    console.log('☁️ [Telegram] Berhasil mengirim notifikasi & data ke Telegram Cloud DB!');
+    console.log('☁️ [Telegram] Berhasil mengirim notifikasi ke Telegram!');
+
+    // Also update pinned snapshot in Telegram
+    await updateTelegramSnapshotWithNewTransactions(transactions, tg);
     return true;
   } catch (err) {
     console.error('Failed to push directly to Telegram:', err);
     return false;
+  }
+}
+
+// Update Telegram Pinned Database Snapshot
+async function updateTelegramSnapshotWithNewTransactions(newItems, tgConfig) {
+  try {
+    const tg = tgConfig || getTelegramConfig();
+    if (!tg.botToken || !tg.chatId) return;
+
+    let currentDb = null;
+    try {
+      const chatRes = await fetch(`https://api.telegram.org/bot${tg.botToken}/getChat?chat_id=${tg.chatId}`).then(r => r.json());
+      if (chatRes.ok && chatRes.result?.pinned_message?.text) {
+        const text = chatRes.result.pinned_message.text;
+        const match = text.match(/#FINFLOW_DATA_START#([\s\S]*?)#FINFLOW_DATA_END#/);
+        if (match && match[1]) {
+          currentDb = JSON.parse(match[1].trim());
+        }
+      }
+    } catch (e) {}
+
+    if (!currentDb || !currentDb.data) {
+      currentDb = {
+        version: 1,
+        exportDate: new Date().toISOString(),
+        appName: 'FinFlow',
+        data: {
+          transactions: [],
+          recurringExpenses: [],
+          recurringPayments: [],
+          budgets: [],
+          settings: []
+        }
+      };
+    }
+
+    if (!Array.isArray(currentDb.data.transactions)) {
+      currentDb.data.transactions = [];
+    }
+
+    for (const item of newItems) {
+      const exists = currentDb.data.transactions.some(t => t.id === item.id || (t.title === item.title && t.amount === item.amount && t.date === item.date && t.time === item.time));
+      if (!exists) {
+        currentDb.data.transactions.unshift({
+          ...item,
+          createdAt: item.createdAt || new Date().toISOString()
+        });
+      }
+    }
+    currentDb.exportDate = new Date().toISOString();
+
+    const compactJson = JSON.stringify(currentDb);
+    const nowStr = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+    const messageText = 
+      `📦 *FinFlow Database Snapshot (WhatsApp Auto-Sync)*\n` +
+      `🕒 *Tersimpan*: ${nowStr}\n` +
+      `📝 *Transaksi*: ${currentDb.data.transactions.length} | 🔄 *Tagihan*: ${currentDb.data.recurringExpenses?.length || 0}\n\n` +
+      `#FINFLOW_DATA_START#\n${compactJson}\n#FINFLOW_DATA_END#`;
+
+    const sendRes = await fetch(`https://api.telegram.org/bot${tg.botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: tg.chatId,
+        text: messageText
+      })
+    }).then(r => r.json());
+
+    if (sendRes.ok && sendRes.result?.message_id) {
+      await fetch(`https://api.telegram.org/bot${tg.botToken}/pinChatMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: tg.chatId,
+          message_id: sendRes.result.message_id,
+          disable_notification: true
+        })
+      });
+      console.log('📌 [Telegram Cloud] Database snapshot terbaru berhasil di-pin di Telegram!');
+    }
+  } catch (err) {
+    console.error('Error updating Telegram snapshot:', err);
   }
 }
 
@@ -223,6 +327,8 @@ app.get('/api/status', (req, res) => {
   const pending = getPendingTransactions();
   const tg = getTelegramConfig();
   const acc = getAccountsConfig();
+  const localIp = getLocalNetworkIp();
+
   res.json({
     ok: true,
     status: botStatus,
@@ -232,11 +338,18 @@ app.get('/api/status', (req, res) => {
     pendingCount: pending.length,
     telegramConfigured: !!(tg.botToken && tg.chatId),
     primaryAccount: acc.primaryAccount || 'BCA',
+    localIp,
+    localUrl: `http://${localIp}:${PORT}`,
     tunnelUrl: currentTunnel ? currentTunnel.url : `https://${TUNNEL_SUBDOMAIN}.loca.lt`,
     tunnelStatus: currentTunnel ? 'active' : (isTunnelConnecting ? 'connecting' : 'offline'),
     uptime: Math.floor(process.uptime()),
     pid: process.pid
   });
+});
+
+// Fast Ping Endpoint for Healthcheck
+app.get('/api/ping', (req, res) => {
+  res.json({ ok: true, timestamp: Date.now() });
 });
 
 // Get recent log lines
@@ -291,7 +404,17 @@ app.get('/api/stream', (req, res) => {
   // Send initial connected ping
   res.write(`data: ${JSON.stringify({ type: 'CONNECTED', status: botStatus })}\n\n`);
 
+  // Heartbeat ping every 15s to keep connection alive
+  const pingInterval = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch {
+      clearInterval(pingInterval);
+    }
+  }, 15000);
+
   req.on('close', () => {
+    clearInterval(pingInterval);
     sseClients.delete(res);
   });
 });
@@ -325,9 +448,21 @@ app.post('/api/manual-test', async (req, res) => {
   res.json({ ok: true, parsed, count: parsed.length });
 });
 
-// Initialize Baileys WhatsApp Bot
+// Initialize Baileys WhatsApp Bot with high-reliability keepalive
 async function startWhatsAppBot() {
+  if (isReconnecting) return;
+  isReconnecting = true;
+
   try {
+    // Cleanly close previous socket if any
+    if (sock) {
+      try {
+        sock.ev.removeAllListeners();
+        sock.end();
+      } catch {}
+      sock = null;
+    }
+
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
     const { version } = await fetchLatestBaileysVersion();
 
@@ -336,7 +471,12 @@ async function startWhatsAppBot() {
       auth: state,
       logger: pino({ level: 'silent' }),
       printQRInTerminal: false,
-      browser: ['FinFlow Server', 'Chrome', '1.0.0']
+      browser: ['FinFlow Server', 'Chrome', '120.0.0'],
+      keepAliveIntervalMs: 25000,
+      connectTimeoutMs: 60000,
+      defaultQueryTimeoutMs: 60000,
+      emitOwnEvents: true,
+      retryRequestDelayMs: 2000
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -368,12 +508,8 @@ async function startWhatsAppBot() {
         botStatus = 'disconnected';
         const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
         console.log('⚠️ Koneksi WhatsApp terputus. Menghubungkan kembali:', shouldReconnect);
-        if (shouldReconnect) {
-          setTimeout(startWhatsAppBot, 3000);
-        } else {
-          console.log('❌ Sesi telah keluar. Silakan scan QR code baru.');
-          setTimeout(startWhatsAppBot, 3000);
-        }
+        isReconnecting = false;
+        setTimeout(startWhatsAppBot, shouldReconnect ? 2000 : 5000);
       }
     });
 
@@ -465,6 +601,8 @@ async function startWhatsAppBot() {
   } catch (err) {
     console.error('Fatal error in startWhatsAppBot:', err);
     setTimeout(startWhatsAppBot, 5000);
+  } finally {
+    isReconnecting = false;
   }
 }
 
@@ -520,9 +658,11 @@ async function startPersistentTunnel() {
 
 // Start Express API Server
 app.listen(PORT, '0.0.0.0', () => {
+  const localIp = getLocalNetworkIp();
   console.log('\n======================================================');
-  console.log(`🚀 FINFLOW BOT SERVER RUNNING ON http://localhost:${PORT}`);
-  console.log(`📡 API Status: http://localhost:${PORT}/api/status`);
+  console.log(`🚀 FINFLOW BOT SERVER RUNNING ON PORT ${PORT}`);
+  console.log(`📡 Localhost URL : http://localhost:${PORT}`);
+  console.log(`📶 Wi-Fi LAN URL  : http://${localIp}:${PORT} (Sangat Cepat untuk HP/Laptop)`);
   console.log(`🔄 Realtime Stream: http://localhost:${PORT}/api/stream`);
   console.log('======================================================\n');
   startWhatsAppBot();

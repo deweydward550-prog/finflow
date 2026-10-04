@@ -2,6 +2,7 @@ import { db, getCustomPaymentMethods, getPrimaryPaymentMethod } from '../db/db';
 import { pushDatabaseToTelegram, getTelegramConfig } from './telegramDb';
 
 export const PERMANENT_BOT_URL = 'https://finflow-dewey-bot.loca.lt';
+export const LOCAL_WIFI_BOT_URL = 'http://192.168.0.2:5051';
 
 export function getBotServerUrl() {
   const saved = localStorage.getItem('finflow_wa_server_url');
@@ -31,6 +32,21 @@ const COMMON_HEADERS = {
   'bypass-tunnel-reminder': 'true'
 };
 
+// Helper for fast fetch with timeout
+async function fetchWithTimeout(url, options = {}, timeoutMs = 3500) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    return response;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 let eventSource = null;
 let pollInterval = null;
 
@@ -39,7 +55,7 @@ export async function syncAccountsToBotServer() {
     const serverUrl = getBotServerUrl();
     const accounts = getCustomPaymentMethods();
     const primary = getPrimaryPaymentMethod();
-    await fetch(`${serverUrl}/api/accounts-config`, {
+    await fetchWithTimeout(`${serverUrl}/api/accounts-config`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -49,7 +65,7 @@ export async function syncAccountsToBotServer() {
         primaryAccount: primary ? primary.name : 'BCA',
         accounts: accounts.map(a => ({ id: a.id, name: a.name, isPrimary: !!a.isPrimary }))
       })
-    });
+    }, 3000);
   } catch {
     // Ignore if bot server is unreachable
   }
@@ -64,7 +80,7 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
       // 1. Telegram config
       const tgConfig = getTelegramConfig();
       if (tgConfig.botToken && tgConfig.chatId) {
-        await fetch(`${serverUrl}/api/telegram-config`, {
+        await fetchWithTimeout(`${serverUrl}/api/telegram-config`, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -75,7 +91,7 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
             chatId: tgConfig.chatId,
             autoSync: tgConfig.autoSync
           })
-        });
+        }, 3000);
       }
 
       // 2. Accounts & Primary Account config
@@ -95,9 +111,9 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
   const checkStatus = async () => {
     try {
       const currentUrl = getBotServerUrl();
-      const res = await fetch(`${currentUrl}/api/status`, {
+      const res = await fetchWithTimeout(`${currentUrl}/api/status`, {
         headers: COMMON_HEADERS
-      });
+      }, 3500);
       if (res.ok) {
         const data = await res.json();
         onStatusChange?.(data);
@@ -118,7 +134,6 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
     const currentPrimaryName = primary ? primary.name : 'BSI';
 
     let finalPaymentMethod = item.paymentMethod;
-    // If the item did not have an explicit account specified by the user in WhatsApp, ALWAYS assign current Primary Account!
     if (item.isDefaultPrimary || !item.isExplicitAccount || !finalPaymentMethod) {
       finalPaymentMethod = currentPrimaryName;
     }
@@ -144,9 +159,9 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
   const fetchPending = async () => {
     try {
       const currentUrl = getBotServerUrl();
-      const res = await fetch(`${currentUrl}/api/pending`, {
+      const res = await fetchWithTimeout(`${currentUrl}/api/pending`, {
         headers: COMMON_HEADERS
-      });
+      }, 3500);
       if (res.ok) {
         const { data } = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -155,10 +170,10 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
           }
 
           // Clear server queue
-          await fetch(`${currentUrl}/api/pending/ack`, { 
+          await fetchWithTimeout(`${currentUrl}/api/pending/ack`, { 
             method: 'POST',
             headers: COMMON_HEADERS
-          });
+          }, 3000);
 
           // Notify frontend
           onNewTransactions?.(data);
@@ -204,10 +219,10 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
             }
 
             // Clear server queue
-            fetch(`${getBotServerUrl()}/api/pending/ack`, { 
+            fetchWithTimeout(`${getBotServerUrl()}/api/pending/ack`, { 
               method: 'POST',
               headers: COMMON_HEADERS 
-            }).catch(() => {});
+            }, 3000).catch(() => {});
 
             onNewTransactions?.(parsed.payload);
 
@@ -239,11 +254,11 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
 
   connectSSE();
 
-  // Fallback Polling every 5s
+  // Fallback Polling every 8s
   pollInterval = setInterval(() => {
     fetchPending();
     checkStatus();
-  }, 5000);
+  }, 8000);
 
   // Return cleanup function
   return () => {
@@ -258,7 +273,7 @@ export async function testSendManualChat(messageText) {
   const accounts = getCustomPaymentMethods();
   const primary = getPrimaryPaymentMethod();
 
-  const res = await fetch(`${currentUrl}/api/manual-test`, {
+  const res = await fetchWithTimeout(`${currentUrl}/api/manual-test`, {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json',
@@ -271,6 +286,6 @@ export async function testSendManualChat(messageText) {
         accounts: accounts.map(a => ({ id: a.id, name: a.name, isPrimary: !!a.isPrimary }))
       }
     })
-  });
+  }, 5000);
   return res.json();
 }

@@ -16,7 +16,7 @@ import {
   clearAllDatabaseData, getCustomPaymentMethods, saveCustomPaymentMethods,
   setPrimaryPaymentMethod, DEFAULT_PAYMENT_METHODS
 } from '../db/db';
-import { testSendManualChat, getBotServerUrl, setBotServerUrl, PERMANENT_BOT_URL } from '../services/whatsappSync';
+import { testSendManualChat, getBotServerUrl, setBotServerUrl, PERMANENT_BOT_URL, LOCAL_WIFI_BOT_URL } from '../services/whatsappSync';
 
 export default function SettingsModal({
   isOpen,
@@ -729,27 +729,53 @@ export default function SettingsModal({
 
               {/* Bot Server URL Config */}
               <div className="input-group">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
-                  <label className="input-label" style={{ margin: 0 }}>Bot Server URL (Lokal / Tunnel Permanen)</label>
+                <label className="input-label" style={{ margin: 0 }}>Bot Server URL (Pilih Sesuai Jaringan):</label>
+                <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', margin: '0.25rem 0' }}>
                   <button
                     type="button"
-                    className="text-xs text-primary"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                    className="chip-btn"
+                    onClick={() => {
+                      setServerUrlInput(LOCAL_WIFI_BOT_URL);
+                      setBotServerUrl(LOCAL_WIFI_BOT_URL);
+                      refreshWaStatus(LOCAL_WIFI_BOT_URL);
+                      showToast('📶 Menggunakan IP Wi-Fi Lokal PC (Cepat & Stabil)!', 'success');
+                    }}
+                    title="Gunakan saat HP & PC berada di jaringan Wi-Fi yang sama (Paling Cepat & Stabil)"
+                  >
+                    📶 Wi-Fi Lokal (192.168.0.2)
+                  </button>
+                  <button
+                    type="button"
+                    className="chip-btn"
                     onClick={() => {
                       setServerUrlInput(PERMANENT_BOT_URL);
                       setBotServerUrl(PERMANENT_BOT_URL);
                       refreshWaStatus(PERMANENT_BOT_URL);
-                      showToast('Menggunakan URL Tunnel Permanen Default!', 'success');
+                      showToast('🌐 Menggunakan URL HTTPS Tunnel Online!', 'info');
                     }}
+                    title="Gunakan saat HP menggunakan kuota data seluler di luar rumah"
                   >
-                    Gunakan URL Permanen (Default)
+                    🌐 HTTPS Tunnel Online
+                  </button>
+                  <button
+                    type="button"
+                    className="chip-btn"
+                    onClick={() => {
+                      setServerUrlInput('http://localhost:5051');
+                      setBotServerUrl('http://localhost:5051');
+                      refreshWaStatus('http://localhost:5051');
+                      showToast('💻 Menggunakan Localhost!', 'info');
+                    }}
+                    title="Gunakan saat membuka website di laptop/PC yang sama"
+                  >
+                    💻 Localhost (5051)
                   </button>
                 </div>
                 <div className="wa-url-input-row">
                   <input 
                     type="text"
                     className="input-control font-mono text-xs"
-                    placeholder="https://finflow-dewey-bot.loca.lt atau http://localhost:5051"
+                    placeholder="http://192.168.0.2:5051 atau https://finflow-dewey-bot.loca.lt"
                     value={serverUrlInput}
                     onChange={(e) => setServerUrlInput(e.target.value)}
                     onBlur={() => {
