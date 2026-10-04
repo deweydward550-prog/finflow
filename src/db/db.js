@@ -295,6 +295,14 @@ export async function seedInitialDataIfEmpty(force = false) {
 
 // Mark recurring expense as paid: logs transaction & updates recurringPayments
 export async function markRecurringExpensePaid({ recurring, monthYear, paidDate, paymentMethod }) {
+  const primary = getPrimaryPaymentMethod();
+  const primaryName = primary ? primary.name : 'BSI';
+
+  let finalPaymentMethod = paymentMethod || recurring.paymentMethod;
+  if (!finalPaymentMethod || (finalPaymentMethod === 'BCA' && primaryName !== 'BCA')) {
+    finalPaymentMethod = primaryName;
+  }
+
   const transactionId = await db.transactions.add({
     title: recurring.title,
     amount: recurring.amount,
@@ -302,7 +310,7 @@ export async function markRecurringExpensePaid({ recurring, monthYear, paidDate,
     category: recurring.category,
     date: paidDate,
     time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-    paymentMethod: paymentMethod || recurring.paymentMethod,
+    paymentMethod: finalPaymentMethod,
     notes: `Pembayaran Rutin Bulanan (${recurring.title})`,
     recurringId: recurring.id,
     createdAt: new Date().toISOString()

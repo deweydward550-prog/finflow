@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   db, seedInitialDataIfEmpty, markRecurringExpensePaid, 
-  unmarkRecurringExpensePaid, clearAllDatabaseData 
+  unmarkRecurringExpensePaid, clearAllDatabaseData, getPrimaryPaymentMethod 
 } from './db/db';
 import Header from './components/Header';
 import DailyExpenses from './components/DailyExpenses';
@@ -98,6 +98,24 @@ export default function App() {
       const txs = await db.transactions.toArray();
       const recurring = await db.recurringExpenses.toArray();
       const payments = await db.recurringPayments.toArray();
+
+      // Auto-align recurring templates and legacy recurring transactions to current Primary Account if they have default BCA
+      const primary = getPrimaryPaymentMethod();
+      const primaryName = primary ? primary.name : 'BSI';
+      if (primaryName !== 'BCA') {
+        for (const r of recurring) {
+          if (r.paymentMethod === 'BCA' || !r.paymentMethod) {
+            r.paymentMethod = primaryName;
+            await db.recurringExpenses.update(r.id, { paymentMethod: primaryName });
+          }
+        }
+        for (const t of txs) {
+          if (t.recurringId && (t.paymentMethod === 'BCA' || !t.paymentMethod)) {
+            t.paymentMethod = primaryName;
+            await db.transactions.update(t.id, { paymentMethod: primaryName });
+          }
+        }
+      }
 
       // Clean orphaned payments whose transaction was deleted
       const txIdSet = new Set(txs.map(t => t.id));
@@ -293,15 +311,21 @@ export default function App() {
       const now = new Date();
       const day = String(now.getDate()).padStart(2, '0');
       const paidDate = `${selectedMonthYear}-${day}`;
+      const primary = getPrimaryPaymentMethod();
+      const primaryName = primary ? primary.name : 'BSI';
+
+      const targetMethod = (recurringItem.paymentMethod && recurringItem.paymentMethod !== 'BCA')
+        ? recurringItem.paymentMethod
+        : primaryName;
 
       await markRecurringExpensePaid({
         recurring: recurringItem,
         monthYear: selectedMonthYear,
         paidDate,
-        paymentMethod: recurringItem.paymentMethod
+        paymentMethod: targetMethod
       });
 
-      showToast(`⚔️ Misi "${recurringItem.title}" selesai!`, 'success');
+      showToast(`⚔️ Misi "${recurringItem.title}" selesai! (${targetMethod})`, 'success');
       await loadData();
       triggerTelegramSync();
     } catch (err) {

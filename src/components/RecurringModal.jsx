@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, Check, Calendar, Tag, Sparkles, 
-  Wifi, Zap, Home, Tv, HeartPulse, Shield, Droplets, Dumbbell, Wallet, Utensils
+  Wifi, Zap, Home, Tv, HeartPulse, Shield, Droplets, Dumbbell, Wallet, Utensils,
+  CreditCard, Banknote, Smartphone, Star
 } from 'lucide-react';
 import { getCategoryIcon, formatAmountInput, parseAmountInput } from '../utils/formatters';
+import { getCustomPaymentMethods, getPrimaryPaymentMethod } from '../db/db';
 
 export default function RecurringModal({
   isOpen,
@@ -16,6 +18,10 @@ export default function RecurringModal({
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [dueDay, setDueDay] = useState(5);
+  const [paymentMethod, setPaymentMethod] = useState(() => {
+    return initialData?.paymentMethod || getPrimaryPaymentMethod()?.name || 'BSI';
+  });
+  const [paymentMethodsList, setPaymentMethodsList] = useState(() => getCustomPaymentMethods());
   const [icon, setIcon] = useState('Zap');
   const [color, setColor] = useState('#3B82F6');
   const [notes, setNotes] = useState('');
@@ -40,10 +46,15 @@ export default function RecurringModal({
   ];
 
   useEffect(() => {
+    const methods = getCustomPaymentMethods();
+    setPaymentMethodsList(methods);
+    const primary = getPrimaryPaymentMethod();
+
     if (initialData) {
       setTitle(initialData.title || '');
       setAmount(initialData.amount ? formatAmountInput(initialData.amount) : '');
       setDueDay(initialData.dueDay || 5);
+      setPaymentMethod(initialData.paymentMethod || primary?.name || 'BSI');
       setIcon(initialData.icon || 'Zap');
       setColor(initialData.color || '#3B82F6');
       setNotes(initialData.notes || '');
@@ -51,6 +62,7 @@ export default function RecurringModal({
       setTitle('');
       setAmount('');
       setDueDay(5);
+      setPaymentMethod(primary?.name || 'BSI');
       setIcon('Wifi');
       setColor('#3B82F6');
       setNotes('');
@@ -74,6 +86,8 @@ export default function RecurringModal({
       return;
     }
 
+    const currentPrimary = getPrimaryPaymentMethod();
+
     onSave({
       ...(initialData?.id ? { id: initialData.id } : {}),
       title: title.trim(),
@@ -81,7 +95,7 @@ export default function RecurringModal({
       category: initialData?.category || 'Tagihan & Utilitas',
       dueDay: parseInt(dueDay, 10),
       billingCycle: 'monthly',
-      paymentMethod: initialData?.paymentMethod || 'BCA',
+      paymentMethod: paymentMethod || currentPrimary?.name || 'BSI',
       icon,
       color,
       notes: notes.trim(),
@@ -152,6 +166,41 @@ export default function RecurringModal({
                   </option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Payment Method / Account */}
+          <div className="input-group">
+            <label className="input-label">Potong dari Rekening / Sumber Dana</label>
+            <div className="method-chips-scroll">
+              {[...paymentMethodsList]
+                .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))
+                .map(m => {
+                  const isSelected = paymentMethod === m.name;
+                  const isCash = m.icon === 'Banknote' || m.name.toLowerCase().includes('tunai') || m.name.toLowerCase().includes('cash');
+                  const isEwallet = m.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => m.name.toLowerCase().includes(e));
+
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={`method-chip ${isSelected ? 'selected' : ''}`}
+                      onClick={() => setPaymentMethod(m.name)}
+                    >
+                      {m.isPrimary ? (
+                        <Star size={13} className="text-warning fill-warning" />
+                      ) : isCash ? (
+                        <Banknote size={13} />
+                      ) : isEwallet ? (
+                        <Smartphone size={13} />
+                      ) : (
+                        <CreditCard size={13} />
+                      )}
+                      <span>{m.name}</span>
+                      {m.isPrimary && <span className="text-2xs font-bold opacity-80">(Utama)</span>}
+                    </button>
+                  );
+                })}
             </div>
           </div>
 
