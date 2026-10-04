@@ -178,9 +178,6 @@ export default function MonthlyQuests({
             <span className="quest-completed-sub">Pemasukan tercatat & semua tagihan rutin telah lunas.</span>
           </div>
         </div>
-        <button className="quest-manage-link" onClick={onOpenManageRecurring} title="Kelola daftar tagihan rutin">
-          Kelola Tagihan
-        </button>
       </div>
     );
   }
