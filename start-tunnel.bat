@@ -4,7 +4,8 @@ cd /d "%~dp0"
 echo ========================================================
 echo       FINFLOW BOT HTTPS TUNNEL (UNTUK VERCEL)
 echo ========================================================
-echo Membuat URL HTTPS publik untuk menghubungkan bot ke Vercel...
+echo Membuka jalur HTTPS tunnel publik (127.0.0.1:5051)...
+echo Pastikan jendela "npm run bot" TETAP AKTIF di sebelah.
 echo.
-npm run tunnel
+npx -y localtunnel --port 5051 --local-host 127.0.0.1
 pause

@@ -52,7 +52,9 @@ export default function SettingsModal({
   const refreshWaStatus = async (customUrl) => {
     const urlToUse = (customUrl !== undefined ? customUrl : serverUrlInput) || getBotServerUrl();
     try {
-      const res = await fetch(`${urlToUse}/api/status`);
+      const res = await fetch(`${urlToUse}/api/status`, {
+        headers: { 'Bypass-Tunnel-Reminder': 'true' }
+      });
       if (res.ok) {
         const data = await res.json();
         setWaServerStatus(data);

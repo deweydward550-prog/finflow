@@ -102,7 +102,11 @@ const CATEGORY_EMOJI = {
 
 // Express App
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Bypass-Tunnel-Reminder', 'bypass-tunnel-reminder']
+}));
 app.use(express.json());
 
 // Broadcast new transactions to connected FinFlow web frontend via SSE
@@ -376,7 +380,7 @@ async function startWhatsAppBot() {
 }
 
 // Start Express API Server
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log('\n======================================================');
   console.log(`🚀 FINFLOW BOT SERVER RUNNING ON http://localhost:${PORT}`);
   console.log(`📡 API Status: http://localhost:${PORT}/api/status`);

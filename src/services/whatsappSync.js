@@ -15,6 +15,11 @@ export function setBotServerUrl(url) {
   }
 }
 
+const COMMON_HEADERS = {
+  'Bypass-Tunnel-Reminder': 'true',
+  'bypass-tunnel-reminder': 'true'
+};
+
 let eventSource = null;
 let pollInterval = null;
 
@@ -28,7 +33,10 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
       if (tgConfig.botToken && tgConfig.chatId) {
         await fetch(`${serverUrl}/api/telegram-config`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...COMMON_HEADERS
+          },
           body: JSON.stringify({
             botToken: tgConfig.botToken,
             chatId: tgConfig.chatId,
@@ -45,7 +53,9 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
   const checkStatus = async () => {
     try {
       const currentUrl = getBotServerUrl();
-      const res = await fetch(`${currentUrl}/api/status`);
+      const res = await fetch(`${currentUrl}/api/status`, {
+        headers: COMMON_HEADERS
+      });
       if (res.ok) {
         const data = await res.json();
         onStatusChange?.(data);
@@ -64,7 +74,9 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
   const fetchPending = async () => {
     try {
       const currentUrl = getBotServerUrl();
-      const res = await fetch(`${currentUrl}/api/pending`);
+      const res = await fetch(`${currentUrl}/api/pending`, {
+        headers: COMMON_HEADERS
+      });
       if (res.ok) {
         const { data } = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -87,7 +99,10 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
           }
 
           // Clear server queue
-          await fetch(`${currentUrl}/api/pending/ack`, { method: 'POST' });
+          await fetch(`${currentUrl}/api/pending/ack`, { 
+            method: 'POST',
+            headers: COMMON_HEADERS
+          });
 
           // Notify frontend
           onNewTransactions?.(data);
@@ -145,7 +160,10 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange }) {
             }
 
             // Clear server queue
-            fetch(`${getBotServerUrl()}/api/pending/ack`, { method: 'POST' }).catch(() => {});
+            fetch(`${getBotServerUrl()}/api/pending/ack`, { 
+              method: 'POST',
+              headers: COMMON_HEADERS 
+            }).catch(() => {});
 
             onNewTransactions?.(parsed.payload);
 
@@ -194,7 +212,10 @@ export async function testSendManualChat(messageText, paymentMethod = 'BCA') {
   const currentUrl = getBotServerUrl();
   const res = await fetch(`${currentUrl}/api/manual-test`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      ...COMMON_HEADERS
+    },
     body: JSON.stringify({ message: messageText, paymentMethod })
   });
   return res.json();
