@@ -21,6 +21,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 const AUTH_DIR = path.join(__dirname, 'auth_info_baileys');
 const PENDING_FILE = path.join(DATA_DIR, 'pending_transactions.json');
 const TELEGRAM_CONFIG_FILE = path.join(DATA_DIR, 'telegram_config.json');
+const ACCOUNTS_CONFIG_FILE = path.join(DATA_DIR, 'accounts_config.json');
 
 // Ensure directories exist
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -68,6 +69,30 @@ function saveTelegramConfig(config) {
     return updated;
   } catch (err) {
     console.error('Error saving telegram config:', err);
+  }
+}
+
+// Read / Write Registered Accounts and Primary Account
+function getAccountsConfig() {
+  try {
+    if (fs.existsSync(ACCOUNTS_CONFIG_FILE)) {
+      const data = fs.readFileSync(ACCOUNTS_CONFIG_FILE, 'utf8');
+      return JSON.parse(data) || { primaryAccount: 'BCA', accounts: [] };
+    }
+  } catch (err) {
+    console.error('Error reading accounts config:', err);
+  }
+  return { primaryAccount: 'BCA', accounts: [] };
+}
+
+function saveAccountsConfig(config) {
+  try {
+    const current = getAccountsConfig();
+    const updated = { ...current, ...config };
+    fs.writeFileSync(ACCOUNTS_CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf8');
+    return updated;
+  } catch (err) {
+    console.error('Error saving accounts config:', err);
   }
 }
 
@@ -137,12 +162,13 @@ async function pushToTelegramDirectly(transactions) {
     let totalIncome = 0;
     const lines = transactions.map((t, idx) => {
       const emoji = CATEGORY_EMOJI[t.category] || '💸';
+      const accLabel = t.paymentMethod ? ` (${t.paymentMethod})` : '';
       if (t.type === 'income') {
         totalIncome += t.amount;
-        return `${idx + 1}. ${emoji} *${t.title}* — +${formatRupiahSimple(t.amount)}`;
+        return `${idx + 1}. ${emoji} *${t.title}* — +${formatRupiahSimple(t.amount)}${accLabel}`;
       } else {
         totalExpense += t.amount;
-        return `${idx + 1}. ${emoji} *${t.title}* — ${formatRupiahSimple(t.amount)}`;
+        return `${idx + 1}. ${emoji} *${t.title}* — ${formatRupiahSimple(t.amount)}${accLabel}`;
       }
     });
 
@@ -174,6 +200,7 @@ async function pushToTelegramDirectly(transactions) {
 app.get('/api/status', (req, res) => {
   const pending = getPendingTransactions();
   const tg = getTelegramConfig();
+  const acc = getAccountsConfig();
   res.json({
     ok: true,
     status: botStatus,
@@ -181,7 +208,8 @@ app.get('/api/status', (req, res) => {
     hasQR: !!currentQR,
     qr: currentQR,
     pendingCount: pending.length,
-    telegramConfigured: !!(tg.botToken && tg.chatId)
+    telegramConfigured: !!(tg.botToken && tg.chatId),
+    primaryAccount: acc.primaryAccount || 'BCA'
   });
 });
 
@@ -193,6 +221,21 @@ app.post('/api/telegram-config', (req, res) => {
     console.log('✅ [Server] Telegram Cloud DB credentials tersimpan di server lokal.');
   }
   res.json({ ok: true, message: 'Telegram config updated' });
+});
+
+// Configure Accounts and Primary Account
+app.get('/api/accounts-config', (req, res) => {
+  res.json({ ok: true, data: getAccountsConfig() });
+});
+
+app.post('/api/accounts-config', (req, res) => {
+  const { primaryAccount, accounts } = req.body;
+  const updated = saveAccountsConfig({
+    primaryAccount: primaryAccount || 'BCA',
+    accounts: Array.isArray(accounts) ? accounts : []
+  });
+  console.log(`✅ [Server] Rekening Utama diatur ke: "${updated.primaryAccount}", Total ${updated.accounts.length} rekening terdaftar.`);
+  res.json({ ok: true, data: updated });
 });
 
 // SSE Live Stream for Realtime Frontend Sync
@@ -223,12 +266,13 @@ app.post('/api/pending/ack', (req, res) => {
   res.json({ ok: true, message: 'Pending queue cleared' });
 });
 
-// Manual test endpoint (e.g. from browser or postman)
+// Manual test endpoint (e.g. from browser or simulator)
 app.post('/api/manual-test', async (req, res) => {
-  const { message, paymentMethod = 'BCA' } = req.body;
+  const { message, options } = req.body;
   if (!message) return res.status(400).json({ ok: false, error: 'Message is required' });
 
-  const parsed = parseWhatsAppMessage(message, paymentMethod);
+  const accConfig = options || getAccountsConfig();
+  const parsed = parseWhatsAppMessage(message, accConfig);
   if (parsed.length > 0) {
     const existing = getPendingTransactions();
     const updated = [...existing, ...parsed];
@@ -308,8 +352,11 @@ async function startWhatsAppBot() {
 
         if (!text || !text.trim()) continue;
 
-        // Parse items from chat (e.g. "naspad 13000 / bensin 20.000 / cukur 25k")
-        const parsedItems = parseWhatsAppMessage(text.trim(), 'BCA');
+        // Fetch registered accounts and primary account
+        const accConfig = getAccountsConfig();
+
+        // Parse items from chat (e.g. "naspad 13000 sea / bensin 30k bsi / lauk 20k")
+        const parsedItems = parseWhatsAppMessage(text.trim(), accConfig);
 
         if (parsedItems.length > 0) {
           console.log(`📥 [WhatsApp] Menerima ${parsedItems.length} transaksi dari: ${msg.pushName || msg.key.remoteJid}`);
@@ -332,12 +379,13 @@ async function startWhatsAppBot() {
 
           const lines = parsedItems.map((item, idx) => {
             const emoji = CATEGORY_EMOJI[item.category] || '💸';
+            const accLabel = item.paymentMethod ? ` _(${item.paymentMethod})_` : '';
             if (item.type === 'income') {
               totalIncome += item.amount;
-              return `${idx + 1}. ${emoji} *${item.title}* — +${formatRupiahSimple(item.amount)} _(${item.category})_`;
+              return `${idx + 1}. ${emoji} *${item.title}* — +${formatRupiahSimple(item.amount)}${accLabel}`;
             } else {
               totalExpense += item.amount;
-              return `${idx + 1}. ${emoji} *${item.title}* — ${formatRupiahSimple(item.amount)} _(${item.category})_`;
+              return `${idx + 1}. ${emoji} *${item.title}* — ${formatRupiahSimple(item.amount)}${accLabel}`;
             }
           });
 

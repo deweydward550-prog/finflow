@@ -782,19 +782,19 @@ export default function SettingsModal({
 
               {/* Format Examples Card */}
               <div className="wa-guide-card">
-                <span className="wa-guide-title">Contoh Format Chat yang Didukung:</span>
+                <span className="wa-guide-title">Aturan & Contoh Format Chat WhatsApp:</span>
                 <div className="wa-examples-list">
                   <div className="wa-example-item">
-                    <span className="wa-ex-badge">Multi-Item (Garis Miring /)</span>
-                    <code>naspad 13000 / bensin 20.000 / cukur 25k</code>
+                    <span className="wa-ex-badge">Format Khusus Rekening (Nama, Nominal, Rekening)</span>
+                    <code>naspad 13000 sea / bensin 30k bsi / jajan 25.000 bca</code>
                   </div>
                   <div className="wa-example-item">
-                    <span className="wa-ex-badge">Koma (,) atau Baris Baru</span>
-                    <code>kopi 18rb, makan siang 25k, parkir 2000</code>
+                    <span className="wa-ex-badge">Otomatis Rekening Utama (Tanpa Rekening)</span>
+                    <code>lauk 20k / kopi 18rb / cukur 25k</code>
                   </div>
                   <div className="wa-example-item">
-                    <span className="wa-ex-badge">Singkatan Nominal (k, rb, jt)</span>
-                    <code>25k cukur, 50rb bensin, 1.5jt sewa kost</code>
+                    <span className="wa-ex-badge">Pemisah Multi-Item (Garis Miring / Koma / Baris Baru)</span>
+                    <code>naspad 13000 sea, bensin 30k bsi, lauk 20k</code>
                   </div>
                 </div>
               </div>

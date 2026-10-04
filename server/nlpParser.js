@@ -6,7 +6,8 @@ const CATEGORY_KEYWORDS = {
     'bebek', 'kopi', 'coffee', 'kopsus', 'caffe', 'cafe', 'snack', 'roti', 'burger', 
     'pizza', 'gofood', 'grabfood', 'shopeefood', 'minum', 'es teh', 'jus', 'sarapan', 
     'lunch', 'dinner', 'jajan', 'martabak', 'gorengan', 'siomay', 'batagor', 'pecel',
-    'seblak', 'cilok', 'cimol', 'boba', 'chatime', 'starbucks', 'angkringan', 'esteh'
+    'seblak', 'cilok', 'cimol', 'boba', 'chatime', 'starbucks', 'angkringan', 'esteh',
+    'lauk', 'sayur', 'pecel lele', 'ketoprak', 'sate', 'gudeg', 'rawon'
   ],
   'Transportasi & Bensin': [
     'bensin', 'pertamax', 'pertalite', 'solar', 'shell', 'spbu', 'ojol', 'gojek', 
@@ -51,6 +52,71 @@ const INCOME_KEYWORDS = [
   'bonus', 'thr', 'dapat uang', 'terima uang', 'tf masuk', 'transfer masuk', 
   'pemasukan', 'income', 'cair', 'penjualan', 'hasil jualan', 'cashback', 'dividen'
 ];
+
+export const KNOWN_ACCOUNT_ALIASES = {
+  'sea': 'SeaBank',
+  'seabank': 'SeaBank',
+  'bca': 'BCA',
+  'bni': 'BNI',
+  'bri': 'BRI',
+  'bsi': 'BSI',
+  'mandiri': 'Mandiri',
+  'jago': 'Bank Jago',
+  'bank jago': 'Bank Jago',
+  'jenius': 'Jenius',
+  'btpn': 'Jenius',
+  'dana': 'DANA',
+  'gopay': 'GoPay',
+  'ovo': 'OVO',
+  'spay': 'ShopeePay',
+  'shopeepay': 'ShopeePay',
+  'linkaja': 'LinkAja',
+  'cash': 'Tunai',
+  'tunai': 'Tunai'
+};
+
+/**
+ * Resolves account token into registered account or fallback to Primary Account
+ */
+export function resolvePaymentMethod(accountToken, availableAccounts = [], defaultPrimary = 'BCA') {
+  if (!accountToken || !accountToken.trim()) {
+    if (Array.isArray(availableAccounts) && availableAccounts.length > 0) {
+      const primary = availableAccounts.find(a => a.isPrimary) || availableAccounts[0];
+      if (primary && primary.name) return primary.name;
+    }
+    return defaultPrimary || 'BCA';
+  }
+
+  const token = accountToken.trim().toLowerCase();
+
+  // 1. Exact match with user custom accounts
+  if (Array.isArray(availableAccounts) && availableAccounts.length > 0) {
+    const exact = availableAccounts.find(a => a.name.toLowerCase() === token);
+    if (exact) return exact.name;
+  }
+
+  // 2. Check if token matches standard known alias (e.g. sea -> SeaBank, bsi -> BSI)
+  if (KNOWN_ACCOUNT_ALIASES[token]) {
+    const standardName = KNOWN_ACCOUNT_ALIASES[token];
+    if (Array.isArray(availableAccounts) && availableAccounts.length > 0) {
+      const matchInUser = availableAccounts.find(a => a.name.toLowerCase() === standardName.toLowerCase());
+      if (matchInUser) return matchInUser.name;
+    }
+    return standardName;
+  }
+
+  // 3. Partial prefix match on user accounts
+  if (Array.isArray(availableAccounts) && availableAccounts.length > 0 && token.length >= 2) {
+    const partial = availableAccounts.find(a => 
+      a.name.toLowerCase().startsWith(token) || 
+      (a.name.length >= 3 && token.startsWith(a.name.toLowerCase()))
+    );
+    if (partial) return partial.name;
+  }
+
+  // 4. Default to uppercase
+  return accountToken.toUpperCase();
+}
 
 /**
  * Parse an amount string into numeric integer (Rupiah)
@@ -99,7 +165,6 @@ export function detectCategory(title, type = 'expense') {
 
   for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     for (const kw of keywords) {
-      // Word boundary or partial match
       const regex = new RegExp(`\\b${kw}\\b|${kw}`, 'i');
       if (regex.test(cleanTitle)) {
         return category;
@@ -123,43 +188,51 @@ function capitalizeWords(str) {
 }
 
 /**
- * Parse a single expense segment, e.g. "naspad 13000" or "bensin 20k" or "cukur 25.000"
+ * Parse a single expense segment:
+ * Formats:
+ * 1. "naspad 13000 sea" -> Naspad, Rp 13.000, SeaBank
+ * 2. "bensin 30k bsi" -> Bensin, Rp 30.000, BSI
+ * 3. "jajan 25.000 bca" -> Jajan, Rp 25.000, BCA
+ * 4. "lauk 20k" -> Lauk, Rp 20.000, Rekening Utama
  */
-export function parseSingleItem(rawSegment, defaultPaymentMethod = 'BCA') {
+export function parseSingleItem(rawSegment, options = {}) {
   let text = rawSegment.trim();
   if (!text) return null;
+
+  // Options normalization
+  let primaryAccount = 'BCA';
+  let availableAccounts = [];
+
+  if (typeof options === 'string') {
+    primaryAccount = options;
+  } else if (typeof options === 'object' && options !== null) {
+    primaryAccount = options.primaryAccount || options.defaultPaymentMethod || 'BCA';
+    availableAccounts = options.accounts || options.availableAccounts || [];
+  }
 
   // Remove leading prefixes like "catat", "beli", "bayar", "isi", "buat"
   text = text.replace(/^(catat|beli|bayar|isi|buat|untuk)\s+/i, '');
 
-  // Extract amount pattern at the end or beginning of string
-  // Matches: 13000, 20.000, 25k, 25rb, 1.5jt, Rp 13.000
-  const amountRegex = /(?:rp\.?\s*)?([\d.,]+(?:\s*(?:k|rb|ribu|jt|juta))?|\d+)/i;
-  
-  // Try matching amount at the end: "naspad 13000" or "naspad Rp 13.000"
-  const endMatch = text.match(/(.*?)(?:\s+)?(?:rp\.?\s*)?(\b[\d.,]+\s*(?:k|rb|ribu|jt|juta)?|\b\d{3,}\b)$/i);
-  
   let title = '';
   let rawAmount = '';
+  let rawAccount = '';
 
-  if (endMatch && endMatch[1] && endMatch[2]) {
-    title = endMatch[1].trim();
-    rawAmount = endMatch[2].trim();
+  // Pattern 1: [Title] [Amount] [Optional Account Suffix]
+  // e.g. "naspad 13000 sea" or "bensin 30k bsi" or "lauk 20k" or "jajan 25.000 bca"
+  const standardMatch = text.match(/^(.*?)(?:[:\s=-]+)?(?:rp\.?\s*)?(\b[\d.,]+(?:\s*(?:k|rb|ribu|jt|juta))?|\b\d{3,}\b)(?:\s+(?:via|pake|pakai|rek|rekening|dari)?\s*([a-zA-Z0-9_\-]+))?$/i);
+
+  if (standardMatch && standardMatch[1] && standardMatch[2]) {
+    title = standardMatch[1].trim();
+    rawAmount = standardMatch[2].trim();
+    rawAccount = standardMatch[3] ? standardMatch[3].trim() : '';
   } else {
-    // Try matching amount anywhere
-    const generalMatch = text.match(/^(.*?)(?:[:\s=-]+)(?:rp\.?\s*)?([\d.,]+\s*(?:k|rb|ribu|jt|juta)?|\d+)$/i);
-    if (generalMatch) {
-      title = generalMatch[1].trim();
-      rawAmount = generalMatch[2].trim();
-    }
-  }
-
-  // If still not matched, try reverse: "13000 naspad" or "20k bensin"
-  if (!rawAmount) {
-    const reverseMatch = text.match(/^(?:rp\.?\s*)?([\d.,]+\s*(?:k|rb|ribu|jt|juta)?|\d+)\s+(.*)$/i);
+    // Pattern 2: [Amount] [Title] [Optional Account]
+    // e.g. "13000 naspad sea" or "20k lauk"
+    const reverseMatch = text.match(/^(?:rp\.?\s*)?([\d.,]+(?:\s*(?:k|rb|ribu|jt|juta))?|\d+)\s+(.*?)(?:\s+(?:via|pake|pakai|rek|rekening|dari)?\s*([a-zA-Z0-9_\-]+))?$/i);
     if (reverseMatch) {
       rawAmount = reverseMatch[1].trim();
       title = reverseMatch[2].trim();
+      rawAccount = reverseMatch[3] ? reverseMatch[3].trim() : '';
     }
   }
 
@@ -178,6 +251,9 @@ export function parseSingleItem(rawSegment, defaultPaymentMethod = 'BCA') {
   const type = isIncome ? 'income' : 'expense';
   const category = detectCategory(title, type);
 
+  // Resolve payment method / account
+  const paymentMethod = resolvePaymentMethod(rawAccount, availableAccounts, primaryAccount);
+
   const now = new Date();
   const date = now.toISOString().split('T')[0];
   const time = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
@@ -188,10 +264,10 @@ export function parseSingleItem(rawSegment, defaultPaymentMethod = 'BCA') {
     amount: numAmount,
     type,
     category,
-    paymentMethod: defaultPaymentMethod,
+    paymentMethod,
     date,
     time,
-    notes: 'Input otomatis via WhatsApp Bot',
+    notes: `Input otomatis via WhatsApp Bot (${paymentMethod})`,
     source: 'whatsapp',
     createdAt: new Date().toISOString()
   };
@@ -199,16 +275,14 @@ export function parseSingleItem(rawSegment, defaultPaymentMethod = 'BCA') {
 
 /**
  * Main parser: takes a full WhatsApp chat message and returns an array of parsed transactions
- * Example input: "naspad 13000 / bensin 20.000 / cukur 25k"
+ * Example input: "naspad 13000 sea / bensin 30k bsi / lauk 20k / jajan 25.000 bca"
  */
-export function parseWhatsAppMessage(messageText, defaultPaymentMethod = 'BCA') {
+export function parseWhatsAppMessage(messageText, options = {}) {
   if (!messageText || typeof messageText !== 'string') return [];
 
-  // Split by common delimiters: '/', '\n', ';', or commas separating item patterns
-  // Clean message
   const rawText = messageText.trim();
   
-  // Determine delimiter
+  // Split by common delimiters: '/', '\n', ';', or commas separating item patterns
   let segments = [];
   if (rawText.includes('/')) {
     segments = rawText.split('/');
@@ -226,7 +300,7 @@ export function parseWhatsAppMessage(messageText, defaultPaymentMethod = 'BCA') 
 
   const results = [];
   for (const seg of segments) {
-    const item = parseSingleItem(seg, defaultPaymentMethod);
+    const item = parseSingleItem(seg, options);
     if (item && item.amount > 0) {
       results.push(item);
     }
