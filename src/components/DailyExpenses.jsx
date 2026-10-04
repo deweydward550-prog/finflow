@@ -67,10 +67,12 @@ export default function DailyExpenses({
         const isEwallet = method.icon === 'Smartphone' || 
           ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => method.name.toLowerCase().includes(e));
 
-        // Use stored balance if explicitly configured; fallback to income
-        const finalBalance = method.storedBalance !== undefined 
-          ? method.storedBalance 
-          : (method.initialBalance !== undefined ? method.initialBalance : inc);
+        // Calculate active balance: (initial/stored baseline + income - expense)
+        const baseInitial = method.initialBalance !== undefined 
+          ? method.initialBalance 
+          : 0;
+
+        const finalBalance = baseInitial + inc - exp;
 
         return {
           ...method,
@@ -129,11 +131,15 @@ export default function DailyExpenses({
   }, [filteredTransactions]);
 
   // Total balance sum from accounts or net balance
+  const hasCustomInitialBalances = useMemo(() => {
+    return paymentMethodsList.some(m => m.initialBalance !== undefined && m.initialBalance !== 0);
+  }, [paymentMethodsList]);
+
   const totalAccountBalances = useMemo(() => {
     return accountBalances.reduce((sum, acc) => sum + (acc.balance || 0), 0);
   }, [accountBalances]);
 
-  const displayedHeroBalance = totalAccountBalances > 0 ? totalAccountBalances : netBalance;
+  const displayedHeroBalance = hasCustomInitialBalances ? totalAccountBalances : netBalance;
 
   return (
     <div className="zen-content-flow">

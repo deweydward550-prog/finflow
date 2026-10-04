@@ -60,10 +60,15 @@ export default function EditAccountBalancesModal({
     const updatedMethods = paymentMethods.map(m => {
       if (balanceInputs[m.id] !== undefined) {
         const num = parseAmountInput(balanceInputs[m.id]);
+        const match = accountBalances.find(b => b.id === m.id);
+        const inc = match ? match.income : 0;
+        const exp = match ? match.expense : 0;
+        const calculatedInitial = num - inc + exp;
+
         return {
           ...m,
           storedBalance: num,
-          initialBalance: num
+          initialBalance: calculatedInitial
         };
       }
       return m;
