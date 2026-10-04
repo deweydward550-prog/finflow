@@ -24,10 +24,30 @@ const AUTH_DIR = path.join(__dirname, 'auth_info_baileys');
 const PENDING_FILE = path.join(DATA_DIR, 'pending_transactions.json');
 const TELEGRAM_CONFIG_FILE = path.join(DATA_DIR, 'telegram_config.json');
 const ACCOUNTS_CONFIG_FILE = path.join(DATA_DIR, 'accounts_config.json');
+const LOG_FILE = path.join(DATA_DIR, 'bot.log');
 
 // Ensure directories exist
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
+
+// Auto append logs to file for background status check
+function appendLog(message) {
+  try {
+    const timestamp = new Date().toLocaleString('id-ID');
+    fs.appendFileSync(LOG_FILE, `[${timestamp}] ${message}\n`, 'utf8');
+  } catch {}
+}
+
+const originalLog = console.log;
+const originalError = console.error;
+console.log = (...args) => {
+  originalLog(...args);
+  appendLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+};
+console.error = (...args) => {
+  originalError(...args);
+  appendLog('[ERROR] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+};
 
 // Read / Write pending transactions
 function getPendingTransactions() {
@@ -211,8 +231,27 @@ app.get('/api/status', (req, res) => {
     qr: currentQR,
     pendingCount: pending.length,
     telegramConfigured: !!(tg.botToken && tg.chatId),
-    primaryAccount: acc.primaryAccount || 'BCA'
+    primaryAccount: acc.primaryAccount || 'BCA',
+    tunnelUrl: currentTunnel ? currentTunnel.url : `https://${TUNNEL_SUBDOMAIN}.loca.lt`,
+    tunnelStatus: currentTunnel ? 'active' : (isTunnelConnecting ? 'connecting' : 'offline'),
+    uptime: Math.floor(process.uptime()),
+    pid: process.pid
   });
+});
+
+// Get recent log lines
+app.get('/api/logs', (req, res) => {
+  try {
+    if (fs.existsSync(LOG_FILE)) {
+      const content = fs.readFileSync(LOG_FILE, 'utf8');
+      const lines = content.split('\n').filter(Boolean);
+      const recent = lines.slice(-100);
+      return res.json({ ok: true, logs: recent });
+    }
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+  res.json({ ok: true, logs: [] });
 });
 
 // Configure Telegram Bot credentials for direct cloud bridge
