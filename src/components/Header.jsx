@@ -50,7 +50,7 @@ export default function Header({
 
         {/* Month Selector */}
         <div className="zen-month-nav">
-          <button className="zen-nav-arrow" onClick={handlePrevMonth} title="Bulan Lalu">
+          <button className="zen-nav-arrow" onClick={handlePrevMonth} title="Bulan Lalu" aria-label="Bulan Lalu">
             <ChevronLeft size={16} />
           </button>
           
@@ -67,6 +67,7 @@ export default function Header({
             onClick={handleNextMonth} 
             disabled={isCurrentOrFuture}
             title={isCurrentOrFuture ? "Tidak dapat berpindah ke bulan masa depan" : "Bulan Berikutnya"}
+            aria-label="Bulan Berikutnya"
           >
             <ChevronRight size={16} />
           </button>
@@ -78,19 +79,20 @@ export default function Header({
             className="header-tagihan-btn" 
             onClick={onOpenManageRecurring} 
             title="Kelola Daftar Tagihan Rutin Bulanan"
+            aria-label="Daftar Tagihan"
           >
             <Swords size={14} className="text-warning" />
-            <span>Tagihan</span>
+            <span className="header-btn-text">Tagihan</span>
           </button>
-          <button className="zen-icon-btn" onClick={toggleTheme} title="Ganti Tema">
+          <button className="zen-icon-btn" onClick={toggleTheme} title="Ganti Tema" aria-label="Ganti Tema">
             {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
           </button>
-          <button className="zen-icon-btn" onClick={onOpenSettings} title="Pengaturan & Koneksi Database">
+          <button className="zen-icon-btn" onClick={onOpenSettings} title="Pengaturan & Koneksi Database" aria-label="Pengaturan">
             <Settings size={17} />
           </button>
-          <button className="zen-primary-btn" onClick={onOpenNewTransaction} title="Catat Pengeluaran / Pemasukan">
+          <button className="zen-primary-btn" onClick={onOpenNewTransaction} title="Catat Pengeluaran / Pemasukan" aria-label="Catat Transaksi">
             <Plus size={16} />
-            <span>Catat</span>
+            <span className="header-btn-text">Catat</span>
           </button>
         </div>
       </div>
