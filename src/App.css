@@ -194,6 +194,10 @@
 
 /* Mobile Header Adaptation (< 540px) */
 @media (max-width: 540px) {
+  .zen-header {
+    margin-bottom: 0.85rem;
+  }
+
   .zen-top-bar {
     flex-wrap: wrap;
     gap: 0.65rem;
@@ -265,25 +269,17 @@
 .zen-hero-balance {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.35rem;
   width: 100%;
   padding-bottom: 0.25rem;
 }
 
-.zen-hero-main-row {
+.zen-hero-top-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
   width: 100%;
-}
-
-.zen-hero-left {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  min-width: 0;
-  flex: 1;
+  gap: 0.5rem;
 }
 
 .zen-hero-label {
@@ -295,11 +291,11 @@
 }
 
 .zen-hero-number {
-  font-size: clamp(1.75rem, 6.5vw, 2.35rem);
+  font-size: clamp(1.65rem, 7.5vw, 2.35rem);
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1.15;
-  word-break: break-word;
+  white-space: nowrap;
 }
 
 .zen-hero-subline {
@@ -308,31 +304,25 @@
   gap: 0.45rem;
   font-size: clamp(0.75rem, 2.8vw, 0.85rem);
   font-weight: 600;
-  margin-top: 0.25rem;
+  margin-top: 0.15rem;
   flex-wrap: wrap;
-}
-
-.zen-hero-right {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  padding-top: 0.15rem;
 }
 
 .zen-hero-info-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
   background: var(--bg-hover);
   border: 1px solid var(--border-hairline);
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.725rem;
   font-weight: 600;
-  padding: 0.4rem 0.65rem;
+  padding: 0.35rem 0.6rem;
   border-radius: var(--radius-full);
   cursor: pointer;
   white-space: nowrap;
   transition: all var(--transition);
+  flex-shrink: 0;
 }
 
 .zen-hero-info-btn:hover {
@@ -1285,11 +1275,20 @@
   align-items: center;
   gap: 0.25rem;
   line-height: 1.2;
+  min-width: 0;
+}
+
+.zen-meta-cat {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .zen-meta-dot {
   color: var(--border-subtle);
   margin: 0 0.1rem;
+  flex-shrink: 0;
 }
 
 .zen-meta-payment {
@@ -1300,6 +1299,7 @@
   border-radius: var(--radius-sm);
   font-size: 0.65rem;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .zen-meta-notes {
@@ -1307,6 +1307,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .zen-tx-right {
@@ -1327,7 +1328,7 @@
   display: flex;
   align-items: center;
   gap: 0.15rem;
-  opacity: 0.6;
+  opacity: 0;
   transition: opacity var(--transition);
 }
 
@@ -1335,9 +1336,12 @@
   opacity: 1;
 }
 
-@media (hover: none) {
+@media (max-width: 640px) {
   .zen-tx-actions {
-    opacity: 0.9;
+    display: none;
+  }
+  .zen-tx-row {
+    padding: 0.75rem 0.25rem;
   }
 }
 

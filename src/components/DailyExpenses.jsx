@@ -177,34 +177,30 @@ export default function DailyExpenses({
     <div className="zen-content-flow">
       {/* 1. Large Calm Balance Hero with Info Dropdown Button */}
       <div className="zen-hero-balance">
-        <div className="zen-hero-main-row">
-          <div className="zen-hero-left">
-            <span className="zen-hero-label">Total Saldo Bersih</span>
-            <h2 className={`zen-hero-number ${displayedHeroBalance >= 0 ? 'text-inc' : 'text-exp'}`}>
-              {displayedHeroBalance >= 0 ? '+' : ''}{formatRupiah(displayedHeroBalance)}
-            </h2>
+        <div className="zen-hero-top-row">
+          <span className="zen-hero-label">Total Saldo Bersih</span>
 
-            <div className="zen-hero-subline">
-              <span className="text-inc">+{formatRupiah(totalIncome)}</span>
-              <span className="zen-sub-dot">•</span>
-              <span className="text-exp">-{formatRupiah(totalExpense)}</span>
-            </div>
-          </div>
+          <button 
+            type="button" 
+            className={`zen-hero-info-btn ${showAccountBreakdown ? 'active' : ''}`}
+            onClick={() => setShowAccountBreakdown(!showAccountBreakdown)}
+            title="Lihat rincian saldo per rekening / dompet"
+            aria-label="Informasi Saldo Rekening"
+          >
+            <Info size={14} />
+            <span className="zen-hero-info-text">Rincian Rekening</span>
+            <ChevronDown size={13} className={showAccountBreakdown ? 'rotate-180' : ''} />
+          </button>
+        </div>
 
-          {/* Info Button in the right empty space */}
-          <div className="zen-hero-right">
-            <button 
-              type="button" 
-              className={`zen-hero-info-btn ${showAccountBreakdown ? 'active' : ''}`}
-              onClick={() => setShowAccountBreakdown(!showAccountBreakdown)}
-              title="Lihat rincian saldo per rekening / dompet"
-              aria-label="Informasi Saldo Rekening"
-            >
-              <Info size={16} />
-              <span className="zen-hero-info-text">Rincian Rekening</span>
-              <ChevronDown size={14} className={showAccountBreakdown ? 'rotate-180' : ''} />
-            </button>
-          </div>
+        <h2 className={`zen-hero-number ${displayedHeroBalance >= 0 ? 'text-inc' : 'text-exp'}`}>
+          {displayedHeroBalance >= 0 ? '+' : ''}{formatRupiah(displayedHeroBalance)}
+        </h2>
+
+        <div className="zen-hero-subline">
+          <span className="text-inc">+{formatRupiah(totalIncome)}</span>
+          <span className="zen-sub-dot">•</span>
+          <span className="text-exp">-{formatRupiah(totalExpense)}</span>
         </div>
 
         {/* Dropdown Information Panel */}
@@ -364,7 +360,7 @@ export default function DailyExpenses({
                       <div className="zen-tx-details">
                         <span className="zen-tx-title">{item.title}</span>
                         <div className="zen-tx-meta">
-                          <span>{item.category}</span>
+                          <span className="zen-meta-cat">{item.category}</span>
                           {item.paymentMethod && (
                             <>
                               <span className="zen-meta-dot">•</span>
