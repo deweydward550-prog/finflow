@@ -13,8 +13,10 @@ import EditAccountBalancesModal from './EditAccountBalancesModal';
 
 export default function DailyExpenses({
   transactions,
+  allTransactions = [],
   totalIncome,
   totalExpense,
+  priorBalance = 0,
   netBalance,
   recurringList,
   recurringPaymentsMap,
@@ -86,36 +88,48 @@ export default function DailyExpenses({
         return !isCash;
       })
       .map(method => {
-        let inc = 0;
-        let exp = 0;
+        let totalIncUpToMonth = 0;
+        let totalExpUpToMonth = 0;
+        let currentMonthInc = 0;
+        let currentMonthExp = 0;
 
-        transactions.forEach(t => {
-          if (t.paymentMethod && t.paymentMethod.toLowerCase() === method.name.toLowerCase()) {
-            if (t.type === 'income') inc += t.amount;
-            else exp += t.amount;
+        (allTransactions || []).forEach(t => {
+          if (!t.date || !t.paymentMethod) return;
+          if (t.paymentMethod.toLowerCase() === method.name.toLowerCase()) {
+            const monthPrefix = t.date.slice(0, 7);
+            if (monthPrefix <= selectedMonthYear) {
+              if (t.type === 'income') totalIncUpToMonth += (t.amount || 0);
+              else totalExpUpToMonth += (t.amount || 0);
+            }
+            if (monthPrefix === selectedMonthYear) {
+              if (t.type === 'income') currentMonthInc += (t.amount || 0);
+              else currentMonthExp += (t.amount || 0);
+            }
           }
         });
 
         const isEwallet = method.icon === 'Smartphone' || 
           ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => method.name.toLowerCase().includes(e));
 
-        // Calculate active balance: (initial/stored baseline + income - expense)
+        // Calculate active rolling balance: (initial/stored baseline + total income up to month - total expense up to month)
         const baseInitial = method.initialBalance !== undefined 
           ? method.initialBalance 
           : 0;
 
-        const finalBalance = baseInitial + inc - exp;
+        const finalBalance = baseInitial + totalIncUpToMonth - totalExpUpToMonth;
 
         return {
           ...method,
-          income: inc,
-          expense: exp,
+          income: currentMonthInc,
+          expense: currentMonthExp,
+          totalIncUpToMonth,
+          totalExpUpToMonth,
           balance: finalBalance,
           isEwallet
         };
       })
       .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
-  }, [paymentMethodsList, transactions]);
+  }, [paymentMethodsList, allTransactions, selectedMonthYear]);
 
   // Handle saving new stored balances from Edit Modal
   const handleSaveAccountBalances = (updatedMethods) => {
@@ -201,6 +215,14 @@ export default function DailyExpenses({
           <span className="text-inc">+{formatRupiah(totalIncome)}</span>
           <span className="zen-sub-dot">•</span>
           <span className="text-exp">-{formatRupiah(totalExpense)}</span>
+          {priorBalance !== 0 && (
+            <>
+              <span className="zen-sub-dot">•</span>
+              <span className="zen-sub-prior" title="Saldo bawaan yang diteruskan dari bulan-bulan sebelumnya">
+                Awal: {priorBalance >= 0 ? '+' : ''}{formatRupiah(priorBalance, false)}
+              </span>
+            </>
+          )}
         </div>
 
         {/* Dropdown Information Panel */}
@@ -222,6 +244,13 @@ export default function DailyExpenses({
                 <Edit3 size={15} />
               </button>
             </div>
+
+            {priorBalance !== 0 && (
+              <div className="zen-rollover-info-bar">
+                <span>Saldo Bawaan Bulan Lalu:</span>
+                <strong>{priorBalance >= 0 ? '+' : ''}{formatRupiah(priorBalance)}</strong>
+              </div>
+            )}
 
             <div className="zen-accounts-grid">
               {accountBalances.map(acc => (

@@ -61,8 +61,8 @@ export default function EditAccountBalancesModal({
       if (balanceInputs[m.id] !== undefined) {
         const num = parseAmountInput(balanceInputs[m.id]);
         const match = accountBalances.find(b => b.id === m.id);
-        const inc = match ? match.income : 0;
-        const exp = match ? match.expense : 0;
+        const inc = match ? (match.totalIncUpToMonth !== undefined ? match.totalIncUpToMonth : match.income) : 0;
+        const exp = match ? (match.totalExpUpToMonth !== undefined ? match.totalExpUpToMonth : match.expense) : 0;
         const calculatedInitial = num - inc + exp;
 
         return {

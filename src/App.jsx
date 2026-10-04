@@ -178,22 +178,36 @@ export default function App() {
     return map;
   }, [recurringPayments, selectedMonthYear, allTransactions]);
 
-  // Summary Metrics
-  const { totalIncome, totalExpense, netBalance } = useMemo(() => {
+  // Summary Metrics (Rolling / Cumulative Balance across months)
+  const { totalIncome, totalExpense, priorBalance, netBalance } = useMemo(() => {
     let inc = 0;
     let exp = 0;
+    let priorInc = 0;
+    let priorExp = 0;
 
-    currentMonthTransactions.forEach(t => {
-      if (t.type === 'income') inc += t.amount;
-      else exp += t.amount;
+    allTransactions.forEach(t => {
+      if (!t.date) return;
+      const monthPrefix = t.date.slice(0, 7);
+
+      if (monthPrefix === selectedMonthYear) {
+        if (t.type === 'income') inc += (t.amount || 0);
+        else exp += (t.amount || 0);
+      } else if (monthPrefix < selectedMonthYear) {
+        if (t.type === 'income') priorInc += (t.amount || 0);
+        else priorExp += (t.amount || 0);
+      }
     });
+
+    const priorBal = priorInc - priorExp;
+    const currentMonthNet = inc - exp;
 
     return {
       totalIncome: inc,
       totalExpense: exp,
-      netBalance: inc - exp
+      priorBalance: priorBal,
+      netBalance: priorBal + currentMonthNet
     };
-  }, [currentMonthTransactions]);
+  }, [allTransactions, selectedMonthYear]);
 
   // Telegram Auto-Sync helper
   const triggerTelegramSync = async () => {
@@ -364,8 +378,10 @@ export default function App() {
       <main>
         <DailyExpenses 
           transactions={currentMonthTransactions}
+          allTransactions={allTransactions}
           totalIncome={totalIncome}
           totalExpense={totalExpense}
+          priorBalance={priorBalance}
           netBalance={netBalance}
           recurringList={recurringList}
           recurringPaymentsMap={currentMonthPaymentsMap}

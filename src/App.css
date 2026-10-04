@@ -355,6 +355,29 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
 }
 
+.zen-sub-prior {
+  color: var(--text-muted);
+  font-size: clamp(0.725rem, 2.7vw, 0.825rem);
+  font-weight: 500;
+}
+
+.zen-rollover-info-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.45rem 0.65rem;
+  background: var(--bg-hover);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 0.725rem;
+  color: var(--text-secondary);
+}
+
+.zen-rollover-info-bar strong {
+  color: var(--text-main);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
 .zen-dropdown-header {
   display: flex;
   align-items: center;
