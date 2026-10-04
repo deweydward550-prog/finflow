@@ -358,6 +358,8 @@ export default function App() {
             setEditingRecurring(null);
             setIsRecurringModalOpen(true);
           }}
+          onDataChanged={loadData}
+          showToast={showToast}
         />
       </main>
 

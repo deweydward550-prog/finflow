@@ -2541,3 +2541,232 @@
   width: 100%;
 }
 
+/* =========================================================
+   ZEN HERO DROPDOWN & ACCOUNT EDIT STYLES
+   ========================================================= */
+.zen-hero-dropdown-panel {
+  margin-top: 1rem;
+  padding: 0.95rem;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+.zen-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.zen-dropdown-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #6b7280);
+}
+
+.zen-dropdown-edit-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-main, #f9fafb);
+  color: var(--text-muted, #6b7280);
+  cursor: pointer;
+  transition: all var(--transition, 0.2s);
+}
+
+.zen-dropdown-edit-icon-btn:hover {
+  background: var(--primary-soft, rgba(99, 102, 241, 0.1));
+  color: var(--primary, #6366f1);
+  border-color: var(--primary, #6366f1);
+  transform: scale(1.05);
+}
+
+.zen-accounts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.65rem;
+}
+
+.zen-account-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.8rem;
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-main, #f9fafb);
+  border: 1px solid var(--border-color, #e5e7eb);
+  transition: all var(--transition, 0.2s);
+}
+
+.zen-account-card.is-primary-card {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.zen-card-primary-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.15);
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-full, 9999px);
+}
+
+/* Edit Account Balances Modal */
+.edit-balances-modal-content {
+  max-width: 480px;
+  width: 100%;
+}
+
+.edit-balances-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.edit-balances-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.edit-balance-item {
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.edit-balance-item.is-primary-item {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.03);
+}
+
+.edit-balance-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.edit-balance-acc-info {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.edit-balance-acc-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main, #111827);
+}
+
+.edit-balance-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.edit-balance-currency-prefix {
+  position: absolute;
+  left: 0.75rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-muted, #6b7280);
+  pointer-events: none;
+}
+
+.edit-balance-input {
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 2.4rem;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-main, #f9fafb);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main, #111827);
+  transition: border-color 0.2s;
+}
+
+.edit-balance-input:focus {
+  outline: none;
+  border-color: var(--primary, #6366f1);
+  background: var(--bg-card, #fff);
+}
+
+.edit-balance-clear-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--text-muted, #9ca3af);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.edit-balance-clear-btn:hover {
+  color: var(--expense, #ef4444);
+}
+
+.edit-balance-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.chip-btn {
+  background: var(--bg-main, #f3f4f6);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: var(--radius-full, 9999px);
+  padding: 0.15rem 0.45rem;
+  font-size: 0.675rem;
+  font-weight: 600;
+  color: var(--text-muted, #4b5563);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.chip-btn:hover {
+  background: var(--primary, #6366f1);
+  color: #fff;
+  border-color: var(--primary, #6366f1);
+}
+
+.edit-balances-total-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--primary-soft, rgba(99, 102, 241, 0.08));
+  border: 1px solid var(--primary-border, rgba(99, 102, 241, 0.2));
+  border-radius: var(--radius-md, 8px);
+  padding: 0.65rem 0.85rem;
+}
+
+.edit-balances-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
+

@@ -1,14 +1,15 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  Search, Plus, Trash2, Edit2, Layers, Info, 
+  Search, Plus, Trash2, Edit2, Edit3, Layers, Info, 
   ChevronDown, CreditCard, Banknote, Smartphone, Wallet, Star
 } from 'lucide-react';
 import { 
   formatRupiah, formatDateID, getRelativeDayLabel, 
   getCategoryIcon, formatMonthYear 
-} from '../utils/formatters';
-import { getCustomPaymentMethods } from '../db/db';
+} from '../utils/formatters.jsx';
+import { getCustomPaymentMethods, saveCustomPaymentMethods } from '../db/db';
 import MonthlyQuests from './MonthlyQuests';
+import EditAccountBalancesModal from './EditAccountBalancesModal';
 
 export default function DailyExpenses({
   transactions,
@@ -24,12 +25,15 @@ export default function DailyExpenses({
   onDeleteTransaction,
   onMarkRecurringPaid,
   onOpenManageRecurring,
-  onOpenNewRecurring
+  onOpenNewRecurring,
+  onDataChanged,
+  showToast
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all'); // all, expense, income
   const [showAccountBreakdown, setShowAccountBreakdown] = useState(false);
-  const [paymentMethodsList, setPaymentMethodsList] = useState(getCustomPaymentMethods());
+  const [isEditBalancesOpen, setIsEditBalancesOpen] = useState(false);
+  const [paymentMethodsList, setPaymentMethodsList] = useState(() => getCustomPaymentMethods());
 
   // Listen to payment methods updates
   useEffect(() => {
@@ -40,8 +44,7 @@ export default function DailyExpenses({
     return () => window.removeEventListener('finflow_payment_methods_updated', handleUpdate);
   }, []);
 
-  // Compute breakdown per account / payment method (excluding cash as requested)
-  // Khusus pengeluaran harian tidak memotong saldo rekening (khusus pencatatan saja)
+  // Compute breakdown per account / payment method (excluding cash)
   const accountBalances = useMemo(() => {
     return paymentMethodsList
       .filter(method => {
@@ -61,19 +64,33 @@ export default function DailyExpenses({
           }
         });
 
-        const isEwallet = method.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => method.name.toLowerCase().includes(e));
+        const isEwallet = method.icon === 'Smartphone' || 
+          ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => method.name.toLowerCase().includes(e));
 
-        // Saldo simpanan rekening murni dari pemasukan tercatat (pengeluaran harian tidak memotong saldo)
+        // Use stored balance if explicitly configured; fallback to income
+        const finalBalance = method.storedBalance !== undefined 
+          ? method.storedBalance 
+          : (method.initialBalance !== undefined ? method.initialBalance : inc);
+
         return {
           ...method,
           income: inc,
           expense: exp,
-          balance: inc,
+          balance: finalBalance,
           isEwallet
         };
       })
       .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
   }, [paymentMethodsList, transactions]);
+
+  // Handle saving new stored balances from Edit Modal
+  const handleSaveAccountBalances = (updatedMethods) => {
+    setPaymentMethodsList(updatedMethods);
+    saveCustomPaymentMethods(updatedMethods);
+    if (onDataChanged) {
+      onDataChanged();
+    }
+  };
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(item => {
@@ -111,6 +128,13 @@ export default function DailyExpenses({
     return Object.values(groups).sort((a, b) => b.date.localeCompare(a.date));
   }, [filteredTransactions]);
 
+  // Total balance sum from accounts or net balance
+  const totalAccountBalances = useMemo(() => {
+    return accountBalances.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+  }, [accountBalances]);
+
+  const displayedHeroBalance = totalAccountBalances > 0 ? totalAccountBalances : netBalance;
+
   return (
     <div className="zen-content-flow">
       {/* 1. Large Calm Balance Hero with Info Dropdown Button */}
@@ -118,8 +142,8 @@ export default function DailyExpenses({
         <div className="zen-hero-main-row">
           <div className="zen-hero-left">
             <span className="zen-hero-label">Total Saldo Bersih</span>
-            <h2 className={`zen-hero-number ${netBalance >= 0 ? 'text-inc' : 'text-exp'}`}>
-              {netBalance >= 0 ? '+' : ''}{formatRupiah(netBalance)}
+            <h2 className={`zen-hero-number ${displayedHeroBalance >= 0 ? 'text-inc' : 'text-exp'}`}>
+              {displayedHeroBalance >= 0 ? '+' : ''}{formatRupiah(displayedHeroBalance)}
             </h2>
 
             <div className="zen-hero-subline">
@@ -152,6 +176,17 @@ export default function DailyExpenses({
               <span className="zen-dropdown-title">
                 Saldo & Arus Kas per Rekening ({formatMonthYear(selectedMonthYear)})
               </span>
+              
+              {/* Clean Icon-Only Edit Button in Top Right */}
+              <button
+                type="button"
+                className="zen-dropdown-edit-icon-btn"
+                onClick={() => setIsEditBalancesOpen(true)}
+                title="Ubah Nominal Saldo Rekening"
+                aria-label="Ubah Nominal Saldo Rekening"
+              >
+                <Edit3 size={15} />
+              </button>
             </div>
 
             <div className="zen-accounts-grid">
@@ -238,62 +273,88 @@ export default function DailyExpenses({
         </div>
       </div>
 
-      {/* 4. Flat Minimalist Transactions Flow */}
-      {groupedTransactions.length === 0 ? (
-        <div className="zen-empty">
-          <p className="text-muted text-sm">Belum ada transaksi pada bulan ini.</p>
-          <button className="zen-link-btn" onClick={onOpenNewTransaction}>
-            + Catat Sekarang
-          </button>
-        </div>
-      ) : (
-        <div className="zen-groups-container">
-          {groupedTransactions.map(group => (
-            <div key={group.date} className="zen-date-group">
-              {/* Date Separator Header */}
-              <div className="zen-group-header">
-                <span className="zen-group-day">{getRelativeDayLabel(group.date)}</span>
-                <span className="zen-group-total">
-                  {group.totalExpense > 0 && <span>-{formatRupiah(group.totalExpense)}</span>}
-                  {group.totalIncome > 0 && <span className="text-inc">+{formatRupiah(group.totalIncome)}</span>}
-                </span>
+      {/* 4. Zen Daily Stream */}
+      <div className="zen-stream-list">
+        {groupedTransactions.length === 0 ? (
+          <div className="zen-empty-state">
+            <div className="zen-empty-icon">🍃</div>
+            <p className="zen-empty-title">Belum ada catatan transaksi</p>
+            <p className="zen-empty-subtitle">Kirim pesan di WhatsApp atau klik tombol + untuk mencatat</p>
+          </div>
+        ) : (
+          groupedTransactions.map(group => (
+            <div key={group.date} className="zen-day-group">
+              {/* Day Header */}
+              <div className="zen-day-header">
+                <div className="zen-day-title-wrap">
+                  <span className="zen-day-relative">{getRelativeDayLabel(group.date)}</span>
+                </div>
+
+                <div className="zen-day-total">
+                  {group.totalIncome > 0 && (
+                    <span className="text-inc font-mono">+{formatRupiah(group.totalIncome, false)}</span>
+                  )}
+                  {group.totalIncome > 0 && group.totalExpense > 0 && (
+                    <span className="zen-day-total-sep">•</span>
+                  )}
+                  {group.totalExpense > 0 && (
+                    <span className="text-exp font-mono">-{formatRupiah(group.totalExpense, false)}</span>
+                  )}
+                </div>
               </div>
 
               {/* Transactions List */}
-              <div className="zen-items-list">
+              <div className="zen-day-items">
                 {group.items.map(item => {
-                  const isExpense = item.type === 'expense';
+                  const IconComp = getCategoryIcon(item.category);
                   return (
-                    <div key={item.id} className="zen-tx-row">
-                      <div className="zen-tx-left">
-                        <div className="zen-tx-icon">
-                          {getCategoryIcon(item.category, 16)}
+                    <div 
+                      key={item.id} 
+                      className="zen-item-card"
+                      onClick={() => onEditTransaction(item)}
+                    >
+                      <div className="zen-item-left">
+                        <div className={`zen-item-icon ${item.type === 'income' ? 'income-icon' : 'expense-icon'}`}>
+                          <IconComp size={16} />
                         </div>
-                        <div className="zen-tx-details">
-                          <span className="zen-tx-title">{item.title}</span>
-                          <span className="zen-tx-meta">
-                            {item.category}
-                            {item.paymentMethod && ` • ${item.paymentMethod}`}
-                            {item.notes && ` • ${item.notes}`}
-                          </span>
+
+                        <div className="zen-item-details">
+                          <span className="zen-item-title">{item.title}</span>
+                          <div className="zen-item-meta">
+                            <span>{item.category}</span>
+                            {item.paymentMethod && (
+                              <>
+                                <span className="zen-meta-dot">•</span>
+                                <span className="zen-meta-payment">{item.paymentMethod}</span>
+                              </>
+                            )}
+                            {item.notes && (
+                              <>
+                                <span className="zen-meta-dot">•</span>
+                                <span className="zen-meta-notes">{item.notes}</span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="zen-tx-right">
-                        <span className={`zen-tx-amount ${isExpense ? 'text-exp' : 'text-inc'}`}>
-                          {isExpense ? '-' : '+'}{formatRupiah(item.amount)}
+                      <div className="zen-item-right">
+                        <span className={`zen-item-amount font-mono ${item.type === 'income' ? 'text-inc' : 'text-exp'}`}>
+                          {item.type === 'income' ? '+' : '-'}{formatRupiah(item.amount)}
                         </span>
 
-                        <div className="zen-tx-actions">
+                        <div className="zen-item-actions" onClick={(e) => e.stopPropagation()}>
                           <button 
-                            className="zen-action-btn" 
+                            type="button" 
+                            className="zen-item-action-btn"
                             onClick={() => onEditTransaction(item)}
-                            title="Edit"
+                            title="Edit Transaksi"
                           >
                             <Edit2 size={13} />
                           </button>
                           <button 
-                            className="zen-action-btn btn-del" 
+                            type="button" 
+                            className="zen-item-action-btn delete-btn"
                             onClick={() => onDeleteTransaction(item)}
                             title="Hapus Transaksi"
                           >
@@ -306,9 +367,19 @@ export default function DailyExpenses({
                 })}
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
+
+      {/* Edit Account Balances Modal */}
+      <EditAccountBalancesModal 
+        isOpen={isEditBalancesOpen}
+        onClose={() => setIsEditBalancesOpen(false)}
+        paymentMethods={paymentMethodsList}
+        accountBalances={accountBalances}
+        onSaveBalances={handleSaveAccountBalances}
+        showToast={showToast}
+      />
     </div>
   );
 }
