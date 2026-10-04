@@ -24,10 +24,8 @@ export default function DailyExpenses({
   onSaveIncome,
   onOpenNewTransaction,
   onEditTransaction,
+  onDeleteTransaction,
   onMarkRecurringPaid,
-  onUnmarkRecurringPaid,
-  onEditRecurring,
-  onDeleteRecurring,
   onOpenManageRecurring,
   onOpenNewRecurring,
   onDataChanged,
@@ -297,9 +295,6 @@ export default function DailyExpenses({
         recurringPaymentsMap={recurringPaymentsMap}
         selectedMonthYear={selectedMonthYear}
         onMarkPaid={onMarkRecurringPaid}
-        onUnmarkPaid={onUnmarkRecurringPaid}
-        onEditRecurring={onEditRecurring}
-        onDeleteRecurring={onDeleteRecurring}
         onOpenManageRecurring={onOpenManageRecurring}
         onOpenNewRecurring={onOpenNewRecurring}
       />

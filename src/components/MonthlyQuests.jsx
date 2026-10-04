@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Trophy, CheckCircle2, Swords, Sparkles, Plus, 
   ChevronRight, ArrowRight, ShieldCheck, Check, Clock,
-  Wallet, CreditCard, Banknote, Target, ChevronDown, Smartphone, Star,
-  Edit2, Trash2, RotateCcw
+  Wallet, CreditCard, Banknote, Target, ChevronDown, Smartphone, Star
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { getCustomPaymentMethods, getPrimaryPaymentMethod } from '../db/db';
@@ -19,9 +18,6 @@ export default function MonthlyQuests({
   recurringPaymentsMap = {},
   selectedMonthYear,
   onMarkPaid,
-  onUnmarkPaid,
-  onEditRecurring,
-  onDeleteRecurring,
   onOpenManageRecurring,
   onOpenNewRecurring
 }) {
@@ -32,8 +28,6 @@ export default function MonthlyQuests({
   const [incomeMethod, setIncomeMethod] = useState(() => getPrimaryPaymentMethod()?.name || 'BCA');
   const [isSubmittingIncome, setIsSubmittingIncome] = useState(false);
   const [showIncomeDetails, setShowIncomeDetails] = useState(false);
-  const [showCompletedList, setShowCompletedList] = useState(false);
-  const [showPaidSection, setShowPaidSection] = useState(false);
 
   // Listen to payment methods updates
   useEffect(() => {
@@ -176,112 +170,14 @@ export default function MonthlyQuests({
   // PHASE 3: ALL Quests Completed (Income recorded & all bills paid)
   if (!hasIncomeQuest && allRecurringPaid) {
     return (
-      <div className="quest-completed-card-wrap">
-        <div 
-          className="quest-completed-banner"
-          onClick={() => setShowCompletedList(!showCompletedList)}
-          style={{ cursor: 'pointer' }}
-        >
-          <div className="quest-completed-left">
-            <Trophy size={18} className="trophy-gold" />
-            <div className="quest-completed-text">
-              <span className="quest-completed-title">Semua Misi Bulan Ini Selesai! 🎉</span>
-              <span className="quest-completed-sub">{totalRecurringCount} tagihan lunas • Klik untuk lihat riwayat / edit</span>
-            </div>
-          </div>
-
-          <div className="quest-completed-right">
-            <button 
-              type="button" 
-              className="quest-manage-pill-btn" 
-              onClick={(e) => { e.stopPropagation(); onOpenManageRecurring(); }}
-              title="Kelola Tagihan Rutin"
-            >
-              Kelola
-            </button>
-            <ChevronDown size={16} className={showCompletedList ? 'rotate-180' : ''} />
+      <div className="quest-completed-banner">
+        <div className="quest-completed-left">
+          <Trophy size={18} className="trophy-gold" />
+          <div className="quest-completed-text">
+            <span className="quest-completed-title">Semua Misi Bulan Ini Selesai! 🎉</span>
+            <span className="quest-completed-sub">Pemasukan tercatat & semua tagihan rutin telah lunas.</span>
           </div>
         </div>
-
-        {/* Expanded Bill History with Edit, Delete, and Batalkan Lunas */}
-        {showCompletedList && (
-          <div className="quest-completed-expanded-list">
-            <div className="quest-history-header">
-              <span className="quest-history-title">Riwayat Tagihan Lunas ({formatMonthYear(selectedMonthYear)})</span>
-              <div className="quest-history-actions-top">
-                <button 
-                  type="button" 
-                  className="zen-link-btn" 
-                  onClick={(e) => { e.stopPropagation(); onOpenNewRecurring(); }}
-                >
-                  + Tambah Tagihan
-                </button>
-              </div>
-            </div>
-
-            <div className="quest-items-list">
-              {itemsWithStatus.map(item => (
-                <div key={item.id} className="quest-item-card is-paid-card">
-                  <div className="quest-item-left">
-                    <div 
-                      className="quest-item-icon-wrap"
-                      style={item.color ? {
-                        background: `${item.color}18`,
-                        color: item.color,
-                        borderColor: `${item.color}35`
-                      } : undefined}
-                    >
-                      {getCategoryIcon(item.icon || item.category, 15)}
-                    </div>
-                    <div className="quest-item-info">
-                      <span className="quest-item-name">{item.title}</span>
-                      <div className="quest-item-meta-row">
-                        <span className="quest-due-tag due-paid">
-                          ✓ Lunas (Tgl {item.dueDay})
-                        </span>
-                        <span className="quest-item-amount">{formatRupiah(item.amount)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="quest-item-actions">
-                    {onUnmarkPaid && (
-                      <button 
-                        type="button"
-                        className="quest-action-subtle-btn btn-undo"
-                        onClick={(e) => { e.stopPropagation(); onUnmarkPaid(item.id); }}
-                        title="Batalkan status lunas (hapus dari pengeluaran)"
-                      >
-                        <RotateCcw size={12} />
-                        <span>Batal Lunas</span>
-                      </button>
-                    )}
-                    {onEditRecurring && (
-                      <button 
-                        type="button"
-                        className="quest-action-subtle-btn"
-                        onClick={(e) => { e.stopPropagation(); onEditRecurring(item); }}
-                        title="Edit template tagihan"
-                      >
-                        <Edit2 size={13} />
-                      </button>
-                    )}
-                    {onDeleteRecurring && (
-                      <button 
-                        type="button"
-                        className="quest-action-subtle-btn btn-del"
-                        onClick={(e) => { e.stopPropagation(); onDeleteRecurring(item); }}
-                        title="Hapus template tagihan"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -482,119 +378,18 @@ export default function MonthlyQuests({
                       </div>
                     </div>
 
-                    <div className="quest-item-right-actions">
-                      {onEditRecurring && (
-                        <button 
-                          type="button"
-                          className="quest-action-subtle-btn"
-                          onClick={(e) => { e.stopPropagation(); onEditRecurring(item); }}
-                          title="Edit template tagihan"
-                        >
-                          <Edit2 size={13} />
-                        </button>
-                      )}
-                      {onDeleteRecurring && (
-                        <button 
-                          type="button"
-                          className="quest-action-subtle-btn btn-del"
-                          onClick={(e) => { e.stopPropagation(); onDeleteRecurring(item); }}
-                          title="Hapus template tagihan"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                      {/* Tombol Bayar Tagihan */}
-                      <button 
-                        type="button"
-                        className="quest-complete-btn"
-                        onClick={(e) => handleCompleteRecurringQuest(e, item)}
-                        title="Bayar tagihan ini (otomatis tercatat ke pengeluaran)"
-                      >
-                        <Check size={13} strokeWidth={3} />
-                        <span>Bayar</span>
-                      </button>
-                    </div>
+                    {/* Tombol Bayar Tagihan */}
+                    <button 
+                      className="quest-complete-btn"
+                      onClick={(e) => handleCompleteRecurringQuest(e, item)}
+                      title="Bayar tagihan ini (otomatis tercatat ke pengeluaran)"
+                    >
+                      <Check size={13} strokeWidth={3} />
+                      <span>Bayar</span>
+                    </button>
                   </div>
                 );
               })
-            )}
-
-            {/* Riwayat Tagihan yang Sudah Lunas Bulan Ini */}
-            {paidRecurringCount > 0 && (
-              <div className="quest-paid-collapsible">
-                <button 
-                  type="button" 
-                  className="quest-paid-toggle-btn"
-                  onClick={() => setShowPaidSection(!showPaidSection)}
-                >
-                  <span>✓ {paidRecurringCount} Tagihan Sudah Lunas Bulan Ini</span>
-                  <ChevronDown size={14} className={showPaidSection ? 'rotate-180' : ''} />
-                </button>
-
-                {showPaidSection && (
-                  <div className="quest-items-list" style={{ marginTop: '0.45rem' }}>
-                    {itemsWithStatus.filter(i => i.isPaid).map(item => (
-                      <div key={item.id} className="quest-item-card is-paid-card">
-                        <div className="quest-item-left">
-                          <div 
-                            className="quest-item-icon-wrap"
-                            style={item.color ? {
-                              background: `${item.color}18`,
-                              color: item.color,
-                              borderColor: `${item.color}35`
-                            } : undefined}
-                          >
-                            {getCategoryIcon(item.icon || item.category, 15)}
-                          </div>
-                          <div className="quest-item-info">
-                            <span className="quest-item-name">{item.title}</span>
-                            <div className="quest-item-meta-row">
-                              <span className="quest-due-tag due-paid">
-                                ✓ Lunas (Tgl {item.dueDay})
-                              </span>
-                              <span className="quest-item-amount">{formatRupiah(item.amount)}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="quest-item-actions">
-                          {onUnmarkPaid && (
-                            <button 
-                              type="button"
-                              className="quest-action-subtle-btn btn-undo"
-                              onClick={(e) => { e.stopPropagation(); onUnmarkPaid(item.id); }}
-                              title="Batalkan status lunas (hapus dari pengeluaran)"
-                            >
-                              <RotateCcw size={12} />
-                              <span>Batal Lunas</span>
-                            </button>
-                          )}
-                          {onEditRecurring && (
-                            <button 
-                              type="button"
-                              className="quest-action-subtle-btn"
-                              onClick={(e) => { e.stopPropagation(); onEditRecurring(item); }}
-                              title="Edit template tagihan"
-                            >
-                              <Edit2 size={13} />
-                            </button>
-                          )}
-                          {onDeleteRecurring && (
-                            <button 
-                              type="button"
-                              className="quest-action-subtle-btn btn-del"
-                              onClick={(e) => { e.stopPropagation(); onDeleteRecurring(item); }}
-                              title="Hapus template tagihan"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             )}
           </div>
         </>

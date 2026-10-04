@@ -355,18 +355,6 @@ export default function App() {
     }
   };
 
-  // Unmark Recurring Quest Paid (Undo Payment)
-  const handleUnmarkRecurringPaid = async (recurringId) => {
-    try {
-      await unmarkRecurringExpensePaid(recurringId, selectedMonthYear);
-      showToast('Status lunas tagihan dibatalkan', 'info');
-      await loadData();
-      triggerTelegramSync();
-    } catch (err) {
-      showToast('Gagal membatalkan status lunas: ' + err.message, 'error');
-    }
-  };
-
   return (
     <div className="app-container">
       {/* Minimal Top Header */}
@@ -409,13 +397,6 @@ export default function App() {
           }}
           onDeleteTransaction={promptDeleteTransaction}
           onMarkRecurringPaid={handleMarkRecurringPaid}
-          onUnmarkRecurringPaid={handleUnmarkRecurringPaid}
-          onEditRecurring={(item) => {
-            setReturnToManage(false);
-            setEditingRecurring(item);
-            setIsRecurringModalOpen(true);
-          }}
-          onDeleteRecurring={promptDeleteRecurring}
           onOpenManageRecurring={() => {
             setReturnToManage(false);
             setIsManageRecurringOpen(true);

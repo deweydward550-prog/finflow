@@ -970,32 +970,17 @@
   transform: scale(0.96);
 }
 
-/* Quest Completed Card Wrap & Banner */
-.quest-completed-card-wrap {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  border: 1px solid var(--border-hairline);
-  background: var(--income-soft);
-  animation: fadeIn 0.25s ease-out;
-}
-
+/* Quest Completed Banner */
 .quest-completed-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 0.95rem;
   background: var(--income-soft);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-md);
+  animation: fadeIn 0.3s ease-out;
   gap: 0.5rem;
-  width: 100%;
-  box-sizing: border-box;
-  transition: background 0.15s ease;
-}
-
-.quest-completed-banner:hover {
-  background: rgba(16, 185, 129, 0.16);
 }
 
 .quest-completed-left {
@@ -1003,143 +988,6 @@
   align-items: center;
   gap: 0.6rem;
   min-width: 0;
-}
-
-.quest-completed-right {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  flex-shrink: 0;
-  color: var(--income);
-}
-
-.quest-manage-pill-btn {
-  font-size: 0.675rem;
-  font-weight: 700;
-  padding: 0.2rem 0.55rem;
-  border-radius: var(--radius-full);
-  background: var(--bg-main);
-  color: var(--income);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.quest-manage-pill-btn:hover {
-  background: var(--income);
-  color: #fff;
-}
-
-.quest-completed-expanded-list {
-  padding: 0.75rem 0.95rem 0.95rem 0.95rem;
-  background: var(--bg-main);
-  border-top: 1px dashed var(--border-hairline);
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.quest-history-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.2rem;
-}
-
-.quest-history-title {
-  font-size: 0.725rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.quest-history-actions-top {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-
-.quest-item-card.is-paid-card {
-  opacity: 0.95;
-  background: var(--bg-subtle);
-  border-color: rgba(16, 185, 129, 0.25);
-}
-
-.quest-due-tag.due-paid {
-  color: var(--income);
-  background: var(--income-soft);
-  font-weight: 700;
-}
-
-.quest-item-actions,
-.quest-item-right-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  flex-shrink: 0;
-}
-
-.quest-action-subtle-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
-  height: 28px;
-  padding: 0 0.45rem;
-  border-radius: var(--radius-sm);
-  background: var(--bg-hover);
-  border: 1px solid var(--border-hairline);
-  color: var(--text-muted);
-  font-size: 0.675rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.quest-action-subtle-btn:hover {
-  color: var(--text-main);
-  background: var(--border-subtle);
-}
-
-.quest-action-subtle-btn.btn-undo:hover {
-  color: #d97706;
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.3);
-}
-
-.quest-action-subtle-btn.btn-del:hover {
-  color: var(--expense);
-  background: var(--expense-soft);
-  border-color: rgba(239, 68, 68, 0.3);
-}
-
-.quest-paid-collapsible {
-  margin-top: 0.35rem;
-  border-top: 1px dashed var(--border-hairline);
-  padding-top: 0.5rem;
-}
-
-.quest-paid-toggle-btn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--income-soft);
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  border-radius: var(--radius-md);
-  padding: 0.45rem 0.65rem;
-  font-size: 0.725rem;
-  font-weight: 700;
-  color: var(--income);
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.quest-paid-toggle-btn:hover {
-  background: rgba(16, 185, 129, 0.18);
 }
 
 .trophy-gold {
