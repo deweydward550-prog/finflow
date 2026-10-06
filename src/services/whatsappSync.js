@@ -1,5 +1,6 @@
 import { db, getCustomPaymentMethods, getPrimaryPaymentMethod } from '../db/db';
 import { pushDatabaseToTelegram, getTelegramConfig } from './telegramDb';
+import { parseWhatsAppMessage } from './whatsappParser';
 
 export const PERMANENT_BOT_URL = 'https://finflow-dewey-bot.loca.lt';
 export const LOCAL_WIFI_BOT_URL = 'http://192.168.0.2:5051';
@@ -431,24 +432,64 @@ export function initWhatsAppSync({ onNewTransactions, onStatusChange, onServerDi
 }
 
 export async function testSendManualChat(messageText) {
-  const currentUrl = getBotServerUrl();
+  if (!messageText || !messageText.trim()) {
+    return { ok: false, error: 'Pesan tidak boleh kosong' };
+  }
+
   const accounts = getCustomPaymentMethods();
   const primary = getPrimaryPaymentMethod();
+  const options = {
+    primaryAccount: primary ? primary.name : 'BSI',
+    accounts: accounts.map(a => ({ id: a.id, name: a.name, isPrimary: !!a.isPrimary }))
+  };
 
-  const res = await fetchWithTimeout(`${currentUrl}/api/manual-test`, {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      ...COMMON_HEADERS
-    },
-    body: JSON.stringify({ 
-      message: messageText,
-      options: {
-        primaryAccount: primary ? primary.name : 'BCA',
-        accounts: accounts.map(a => ({ id: a.id, name: a.name, isPrimary: !!a.isPrimary }))
-      }
-    })
-  }, 5000);
-  return res.json();
+  // 1. Parse client-side first for immediate 0-latency execution
+  const parsedItems = parseWhatsAppMessage(messageText.trim(), options);
+  if (!parsedItems || parsedItems.length === 0) {
+    return { ok: false, error: 'Format pesan tidak dikenali' };
+  }
+
+  // 2. Insert into IndexedDB directly
+  for (const item of parsedItems) {
+    await db.transactions.add({
+      title: item.title,
+      amount: item.amount,
+      type: item.type || 'expense',
+      category: item.category || 'Pengeluaran Lainnya',
+      paymentMethod: item.paymentMethod || options.primaryAccount,
+      date: item.date,
+      time: item.time || '12:00',
+      notes: item.notes || `Input via Simulator WhatsApp (${item.paymentMethod || options.primaryAccount})`,
+      source: 'whatsapp',
+      createdAt: item.createdAt || new Date().toISOString()
+    });
+  }
+
+  // 3. Trigger Telegram Cloud Auto-Backup
+  try {
+    pushDatabaseToTelegram().catch(() => {});
+  } catch {}
+
+  // 4. Also notify local bot server if reachable in background (best effort)
+  try {
+    const currentUrl = getBotServerUrl();
+    fetchWithTimeout(`${currentUrl}/api/manual-test`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...COMMON_HEADERS
+      },
+      body: JSON.stringify({ 
+        message: messageText,
+        options
+      })
+    }, 2000).catch(() => {});
+  } catch {}
+
+  return { 
+    ok: true, 
+    parsed: parsedItems, 
+    count: parsedItems.length 
+  };
 }
 
