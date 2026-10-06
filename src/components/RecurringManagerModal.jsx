@@ -3,7 +3,7 @@ import {
   X, Plus, Edit2, Trash2, Swords, RefreshCw, 
   Check, Calendar, ShieldCheck 
 } from 'lucide-react';
-import { formatRupiah, getCategoryIcon } from '../utils/formatters';
+import { formatRupiah, getCategoryIcon, getCategoryColor } from '../utils/formatters';
 
 export default function RecurringManagerModal({
   isOpen,
@@ -70,51 +70,54 @@ export default function RecurringManagerModal({
             </div>
           ) : (
             <div className="manage-rec-list">
-              {recurringList.map(item => (
-                <div key={item.id} className="manage-rec-row">
-                  <div className="manage-rec-left">
-                    <div 
-                      className="manage-rec-icon"
-                      style={item.color ? {
-                        background: `${item.color}18`,
-                        color: item.color,
-                        borderColor: `${item.color}35`
-                      } : undefined}
-                    >
-                      {getCategoryIcon(item.icon || item.category, 16)}
+              {recurringList.map(item => {
+                const badgeColor = item.color || getCategoryColor(item.icon || item.title || item.category);
+                return (
+                  <div key={item.id} className="manage-rec-row">
+                    <div className="manage-rec-left">
+                      <div 
+                        className="manage-rec-icon"
+                        style={{
+                          background: `${badgeColor}18`,
+                          color: badgeColor,
+                          borderColor: `${badgeColor}35`
+                        }}
+                      >
+                        {getCategoryIcon(item.icon || item.category, 16)}
+                      </div>
+                      <div className="manage-rec-info">
+                        <span className="manage-rec-title">{item.title}</span>
+                        <span className="manage-rec-sub">
+                          Jatuh Tempo: <strong>Tgl {item.dueDay}</strong> • {item.category}
+                        </span>
+                      </div>
                     </div>
-                    <div className="manage-rec-info">
-                      <span className="manage-rec-title">{item.title}</span>
-                      <span className="manage-rec-sub">
-                        Jatuh Tempo: <strong>Tgl {item.dueDay}</strong> • {item.category}
-                      </span>
+
+                    <div className="manage-rec-right">
+                      <span className="manage-rec-amount">{formatRupiah(item.amount)}</span>
+
+                      <div className="manage-rec-actions">
+                        <button 
+                          type="button"
+                          className="btn-icon-subtle" 
+                          onClick={() => handleEdit?.(item)}
+                          title="Edit Tagihan"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button 
+                          type="button"
+                          className="btn-icon-subtle btn-delete" 
+                          onClick={() => handleDelete?.(item)}
+                          title="Hapus Tagihan"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="manage-rec-right">
-                    <span className="manage-rec-amount">{formatRupiah(item.amount)}</span>
-
-                    <div className="manage-rec-actions">
-                      <button 
-                        type="button"
-                        className="btn-icon-subtle" 
-                        onClick={() => handleEdit?.(item)}
-                        title="Edit Tagihan"
-                      >
-                        <Edit2 size={13} />
-                      </button>
-                      <button 
-                        type="button"
-                        className="btn-icon-subtle btn-delete" 
-                        onClick={() => handleDelete?.(item)}
-                        title="Hapus Tagihan"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

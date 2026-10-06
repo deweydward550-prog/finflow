@@ -199,6 +199,109 @@ export async function deleteTransactionFromSupabase(id) {
 }
 
 // =========================================================================
+// RECURRING EXPENSES METADATA HELPER (Icon & Color persistence)
+// =========================================================================
+export function packRecurringNotes(notes = '', icon, color) {
+  let cleanNotes = (notes || '').replace(/\[meta:[^\]]*\]/gi, '').trim();
+  const metaParts = [];
+  if (icon) metaParts.push(`icon=${icon}`);
+  if (color) metaParts.push(`color=${encodeURIComponent(color)}`);
+  
+  if (metaParts.length > 0) {
+    const metaTag = `[meta:${metaParts.join(',')}]`;
+    return cleanNotes ? `${cleanNotes} ${metaTag}` : metaTag;
+  }
+  return cleanNotes;
+}
+
+export function unpackRecurringNotes(rawNotes = '', title = '', category = '') {
+  let notes = (rawNotes || '').trim();
+  let icon = null;
+  let color = null;
+
+  const metaMatch = notes.match(/\[meta:([^\]]+)\]/i);
+  if (metaMatch) {
+    const content = metaMatch[1];
+    const pairs = content.split(',');
+    pairs.forEach(pair => {
+      const [k, v] = pair.split('=');
+      if (k === 'icon' && v) icon = v.trim();
+      if (k === 'color' && v) color = decodeURIComponent(v.trim());
+    });
+    notes = notes.replace(/\[meta:[^\]]*\]/gi, '').trim();
+  }
+
+  // Smart fallback inference if icon / color missing
+  if (!icon) {
+    const t = (title || '').toLowerCase();
+    const c = (category || '').toLowerCase();
+    if (t.includes('bpjs') || t.includes('medis') || t.includes('dokter') || t.includes('obat') || c.includes('kesehatan')) {
+      icon = 'HeartPulse';
+    } else if (t.includes('wifi') || t.includes('internet') || t.includes('indihome') || t.includes('biznet') || t.includes('myrepublic') || t.includes('firstmedia')) {
+      icon = 'Wifi';
+    } else if (t.includes('pln') || t.includes('listrik') || t.includes('token') || t.includes('daya')) {
+      icon = 'Zap';
+    } else if (t.includes('pdam') || t.includes('air') || t.includes('water')) {
+      icon = 'Droplets';
+    } else if (t.includes('kost') || t.includes('rumah') || t.includes('kontrakan') || t.includes('ipl') || t.includes('sewa')) {
+      icon = 'Home';
+    } else if (t.includes('netflix') || t.includes('spotify') || t.includes('youtube') || t.includes('disney') || t.includes('prime') || t.includes('vidio') || c.includes('hiburan')) {
+      icon = 'Tv';
+    } else if (t.includes('asuransi') || t.includes('insurance') || t.includes('prudential') || t.includes('allianz') || t.includes('axa')) {
+      icon = 'Shield';
+    } else if (t.includes('gym') || t.includes('fitness') || t.includes('fitnes')) {
+      icon = 'Dumbbell';
+    } else if (t.includes('katering') || t.includes('makan') || t.includes('galon') || t.includes('beras') || c.includes('makanan')) {
+      icon = 'Utensils';
+    } else if (t.includes('tabungan') || t.includes('cicilan') || t.includes('investasi') || t.includes('arisan') || t.includes('deposito') || t.includes('lily')) {
+      icon = 'Wallet';
+    } else {
+      icon = 'Zap';
+    }
+  }
+
+  if (!color) {
+    switch (icon?.toLowerCase()) {
+      case 'heartpulse':
+        color = '#10B981';
+        break;
+      case 'wifi':
+        color = '#3B82F6';
+        break;
+      case 'zap':
+        color = '#F59E0B';
+        break;
+      case 'droplets':
+        color = '#06B6D4';
+        break;
+      case 'home':
+        color = '#8B5CF6';
+        break;
+      case 'tv':
+        color = '#EC4899';
+        break;
+      case 'shield':
+        color = '#3B82F6';
+        break;
+      case 'dumbbell':
+        color = '#EF4444';
+        break;
+      case 'utensils':
+        color = '#F59E0B';
+        break;
+      case 'wallet':
+        color = '#10B981';
+        break;
+      default:
+        color = '#3B82F6';
+        break;
+    }
+  }
+
+  return { notes, icon, color };
+}
+
+// =========================================================================
 // RECURRING EXPENSES CRUD
 // =========================================================================
 export async function fetchRecurringFromSupabase() {
@@ -215,25 +318,30 @@ export async function fetchRecurringFromSupabase() {
     return null;
   }
 
-  return (data || []).map(r => ({
-    id: isNaN(r.id) ? r.id : Number(r.id),
-    title: r.title,
-    amount: Number(r.amount),
-    category: r.category,
-    paymentMethod: r.payment_method || 'BSI',
-    dueDay: Number(r.due_day),
-    billingCycle: r.billing_cycle || 'monthly',
-    notes: r.notes || '',
-    active: r.active !== false,
-    icon: r.icon || undefined,
-    color: r.color || undefined,
-    createdAt: r.created_at || new Date().toISOString()
-  }));
+  return (data || []).map(r => {
+    const { notes, icon, color } = unpackRecurringNotes(r.notes, r.title, r.category);
+    return {
+      id: isNaN(r.id) ? r.id : Number(r.id),
+      title: r.title,
+      amount: Number(r.amount),
+      category: r.category,
+      paymentMethod: r.payment_method || 'BSI',
+      dueDay: Number(r.due_day),
+      billingCycle: r.billing_cycle || 'monthly',
+      notes: notes,
+      active: r.active !== false,
+      icon: r.icon || icon,
+      color: r.color || color,
+      createdAt: r.created_at || new Date().toISOString()
+    };
+  });
 }
 
 export async function insertRecurringToSupabase(rec) {
   const client = getSupabase();
   if (!client) return null;
+
+  const packedNotes = packRecurringNotes(rec.notes, rec.icon, rec.color);
 
   const payload = {
     id: rec.id ? String(rec.id) : `rec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -243,9 +351,9 @@ export async function insertRecurringToSupabase(rec) {
     payment_method: rec.paymentMethod || 'BSI',
     due_day: Number(rec.dueDay),
     billing_cycle: rec.billingCycle || 'monthly',
-    notes: rec.notes || '',
+    notes: packedNotes,
     active: rec.active !== false,
-    created_at: new Date().toISOString()
+    created_at: rec.createdAt || new Date().toISOString()
   };
 
   const { data, error } = await client.from('recurring_expenses').insert(payload).select().single();
@@ -257,6 +365,8 @@ export async function updateRecurringInSupabase(id, rec) {
   const client = getSupabase();
   if (!client) return null;
 
+  const packedNotes = packRecurringNotes(rec.notes, rec.icon, rec.color);
+
   const payload = {
     title: rec.title,
     amount: rec.amount,
@@ -264,7 +374,7 @@ export async function updateRecurringInSupabase(id, rec) {
     payment_method: rec.paymentMethod,
     due_day: Number(rec.dueDay),
     billing_cycle: rec.billingCycle || 'monthly',
-    notes: rec.notes,
+    notes: packedNotes,
     active: rec.active !== false
   };
 
@@ -387,7 +497,7 @@ export async function migrateLocalDataToSupabase() {
       payment_method: r.paymentMethod || 'BSI',
       due_day: Number(r.dueDay),
       billing_cycle: r.billingCycle || 'monthly',
-      notes: r.notes || '',
+      notes: packRecurringNotes(r.notes, r.icon, r.color),
       active: r.active !== false,
       created_at: r.createdAt || new Date().toISOString()
     }));

@@ -8,7 +8,7 @@ import confetti from 'canvas-confetti';
 import { getCustomPaymentMethods, getPrimaryPaymentMethod } from '../db/db';
 import { 
   formatRupiah, formatMonthYear, getRecurringDueInfo,
-  formatAmountInput, parseAmountInput, getCategoryIcon 
+  formatAmountInput, parseAmountInput, getCategoryIcon, getCategoryColor 
 } from '../utils/formatters';
 
 export default function MonthlyQuests({
@@ -350,6 +350,7 @@ export default function MonthlyQuests({
               unpaidItems.map(item => {
                 const isAnimating = animatingId === item.id;
                 const isOverdue = item.dueInfo.status === 'overdue';
+                const badgeColor = item.color || getCategoryColor(item.icon || item.title || item.category);
 
                 return (
                   <div 
@@ -359,11 +360,11 @@ export default function MonthlyQuests({
                     <div className="quest-item-left">
                       <div 
                         className="quest-item-icon-wrap"
-                        style={item.color ? {
-                          background: `${item.color}18`,
-                          color: item.color,
-                          borderColor: `${item.color}35`
-                        } : undefined}
+                        style={{
+                          background: `${badgeColor}18`,
+                          color: badgeColor,
+                          borderColor: `${badgeColor}35`
+                        }}
                       >
                         {getCategoryIcon(item.icon || item.category, 15)}
                       </div>

@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { 
   formatRupiah, formatDateID, getRelativeDayLabel, 
-  getCategoryIcon, formatMonthYear 
+  getCategoryIcon, getCategoryColor, formatMonthYear 
 } from '../utils/formatters.jsx';
 import { getCustomPaymentMethods, saveCustomPaymentMethods } from '../db/db';
 import MonthlyQuests from './MonthlyQuests';
@@ -51,7 +51,11 @@ export default function DailyExpenses({
     const map = new Map();
     if (Array.isArray(recurringList)) {
       recurringList.forEach(r => {
-        if (r && r.id) map.set(r.id, r);
+        if (r && r.id != null) {
+          map.set(r.id, r);
+          map.set(String(r.id), r);
+          if (!isNaN(r.id)) map.set(Number(r.id), r);
+        }
       });
     }
     return map;
@@ -62,19 +66,32 @@ export default function DailyExpenses({
     if (item.icon) {
       return {
         icon: item.icon,
-        color: item.color || null
+        color: item.color || getCategoryColor(item.icon)
       };
     }
-    if (item.recurringId && recurringMap.has(item.recurringId)) {
-      const rec = recurringMap.get(item.recurringId);
+    if (item.recurringId != null) {
+      const rec = recurringMap.get(item.recurringId) || recurringMap.get(String(item.recurringId));
+      if (rec) {
+        return {
+          icon: rec.icon || rec.category || item.category,
+          color: rec.color || getCategoryColor(rec.icon || rec.title || item.category)
+        };
+      }
+    }
+    // Check if title mentions a known recurring item
+    const matchedRec = (recurringList || []).find(r => 
+      item.title && r.title && item.title.toLowerCase().includes(r.title.toLowerCase())
+    );
+    if (matchedRec) {
       return {
-        icon: rec.icon || item.category,
-        color: rec.color || null
+        icon: matchedRec.icon || matchedRec.category || item.category,
+        color: matchedRec.color || getCategoryColor(matchedRec.icon || matchedRec.title)
       };
     }
+
     return {
       icon: item.category,
-      color: null
+      color: getCategoryColor(item.category || item.title)
     };
   };
 

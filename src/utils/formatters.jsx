@@ -243,7 +243,37 @@ export function getCategoryIcon(iconName, size = 18, className = '') {
     case 'smartphone':
     case 'ewallet':
       return React.createElement(Smartphone, iconProps);
+    case 'wallet':
+    case 'tabungan':
+    case 'cicilan':
+      return React.createElement(Wallet, iconProps);
     default:
       return React.createElement(Wallet, iconProps);
   }
 }
+
+// Get vibrant accent color for a category, icon name, or recurring title
+export function getCategoryColor(nameOrCategory, defaultColor = '#3B82F6') {
+  if (!nameOrCategory) return defaultColor;
+  const key = String(nameOrCategory).toLowerCase();
+  if (key.includes('makan') || key.includes('food') || key.includes('utensils') || key.includes('kuliner') || key.includes('katering')) return '#F59E0B';
+  if (key.includes('trans') || key.includes('bensin') || key.includes('car') || key.includes('motor') || key.includes('ojol')) return '#3B82F6';
+  if (key.includes('tagihan') || key.includes('utilitas') || key.includes('listrik') || key.includes('pln') || key.includes('zap')) return '#F59E0B';
+  if (key.includes('belanja') || key.includes('shopping')) return '#8B5CF6';
+  if (key.includes('hiburan') || key.includes('nonton') || key.includes('netflix') || key.includes('spotify') || key.includes('tv') || key.includes('game')) return '#EC4899';
+  if (key.includes('kesehatan') || key.includes('medis') || key.includes('bpjs') || key.includes('dokter') || key.includes('obat') || key.includes('heartpulse')) return '#10B981';
+  if (key.includes('rumah') || key.includes('kost') || key.includes('kontrakan') || key.includes('home') || key.includes('ipl')) return '#6366F1';
+  if (key.includes('pendidikan') || key.includes('buku') || key.includes('kursus') || key.includes('kuliah') || key.includes('graduationcap')) return '#06B6D4';
+  if (key.includes('keluarga') || key.includes('sedekah') || key.includes('zakat') || key.includes('infaq') || key.includes('hearthandshake')) return '#14B8A6';
+  if (key.includes('gaji') || key.includes('salary') || key.includes('briefcase')) return '#10B981';
+  if (key.includes('freelance') || key.includes('proyek') || key.includes('laptop')) return '#3B82F6';
+  if (key.includes('investasi') || key.includes('dividen') || key.includes('saham') || key.includes('reksadana') || key.includes('trendingup')) return '#8B5CF6';
+  if (key.includes('bonus') || key.includes('thr') || key.includes('hadiah') || key.includes('gift')) return '#F59E0B';
+  if (key.includes('tabungan') || key.includes('lily') || key.includes('wallet') || key.includes('cicilan') || key.includes('arisan')) return '#10B981';
+  if (key.includes('air') || key.includes('pdam') || key.includes('droplets')) return '#06B6D4';
+  if (key.includes('wifi') || key.includes('internet') || key.includes('indihome') || key.includes('biznet')) return '#3B82F6';
+  if (key.includes('gym') || key.includes('fitness') || key.includes('fitnes') || key.includes('dumbbell')) return '#EF4444';
+  if (key.includes('asuransi') || key.includes('shield')) return '#3B82F6';
+  return defaultColor;
+}
+
