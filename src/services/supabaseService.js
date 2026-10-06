@@ -4,10 +4,8 @@ import { db, getCustomPaymentMethods, saveCustomPaymentMethods } from '../db/db'
 const STORAGE_URL_KEY = 'finflow_supabase_url';
 const STORAGE_KEY_KEY = 'finflow_supabase_anon_key';
 
-const _decode = (str) => typeof atob === 'function' ? atob(str) : Buffer.from(str, 'base64').toString('utf8');
-
 export const DEFAULT_SUPABASE_URL = 'https://gblddnytkjpvsftxfyor.supabase.co';
-export const DEFAULT_SUPABASE_KEY = _decode('c2Jfc2VjcmV0XzgtREU0ZnVhaGtlQU15Q29CMDMzdUFfUWJQc1NQQVU=');
+export const DEFAULT_SUPABASE_KEY = 'sb_publishable_B8r2kpKpbtY29m8LVKlafw_JbTQ7A7O';
 
 // Default / fallback credentials if configured in environment
 const ENV_URL = import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;

@@ -61,10 +61,9 @@ function getSupabaseConfig() {
   } catch (err) {
     console.error('Error reading Supabase config:', err.message);
   }
-  const _decode = (str) => Buffer.from(str, 'base64').toString('utf8');
   return { 
     url: 'https://gblddnytkjpvsftxfyor.supabase.co', 
-    anonKey: _decode('c2Jfc2VjcmV0XzgtREU0ZnVhaGtlQU15Q29CMDMzdUFfUWJQc1NQQVU=') 
+    anonKey: 'sb_publishable_B8r2kpKpbtY29m8LVKlafw_JbTQ7A7O' 
   };
 }
 
