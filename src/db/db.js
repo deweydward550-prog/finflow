@@ -65,6 +65,15 @@ export function saveCustomPaymentMethods(methods) {
   }
   localStorage.setItem('finflow_payment_methods', JSON.stringify(list));
   window.dispatchEvent(new CustomEvent('finflow_payment_methods_updated', { detail: list }));
+
+  // Asynchronously sync to Supabase Cloud for 100% multi-device consistency
+  try {
+    import('../services/supabaseService').then(srv => {
+      if (srv && typeof srv.savePaymentMethodsToSupabase === 'function') {
+        srv.savePaymentMethodsToSupabase(list);
+      }
+    }).catch(() => {});
+  } catch {}
 }
 
 export function getPrimaryPaymentMethod() {

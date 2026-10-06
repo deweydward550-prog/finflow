@@ -113,6 +113,64 @@ export function subscribeToRealtime(onDataChanged) {
 }
 
 // =========================================================================
+// ACCOUNT BALANCES & PAYMENT METHODS SYNC (Multi-Device 100% Sync)
+// =========================================================================
+export async function fetchPaymentMethodsFromSupabase() {
+  const client = getSupabase();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from('transactions')
+      .select('notes')
+      .eq('id', 'sys_payment_methods')
+      .maybeSingle();
+
+    if (error || !data || !data.notes) return null;
+
+    const parsed = JSON.parse(data.notes);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      localStorage.setItem('finflow_payment_methods', JSON.stringify(parsed));
+      window.dispatchEvent(new CustomEvent('finflow_payment_methods_updated', { detail: parsed }));
+      return parsed;
+    }
+  } catch (err) {
+    console.warn('[Supabase] Failed to fetch payment methods:', err);
+  }
+  return null;
+}
+
+export async function savePaymentMethodsToSupabase(methods) {
+  const client = getSupabase();
+  if (!client || !Array.isArray(methods) || methods.length === 0) return null;
+
+  try {
+    const payload = {
+      id: 'sys_payment_methods',
+      title: 'FinFlow Account Balances & Settings',
+      amount: 0,
+      type: 'system',
+      category: 'system',
+      date: '1970-01-01',
+      time: '00:00',
+      payment_method: 'SYSTEM',
+      notes: JSON.stringify(methods),
+      source: 'system',
+      created_at: new Date().toISOString()
+    };
+
+    const { data, error } = await client.from('transactions').upsert(payload, { onConflict: 'id' }).select().single();
+    if (error) {
+      console.warn('[Supabase] Failed to save payment methods:', error.message);
+    }
+    return data;
+  } catch (err) {
+    console.warn('[Supabase] Failed to save payment methods:', err);
+    return null;
+  }
+}
+
+// =========================================================================
 // TRANSACTIONS CRUD
 // =========================================================================
 export async function fetchTransactionsFromSupabase() {
@@ -122,6 +180,8 @@ export async function fetchTransactionsFromSupabase() {
   const { data, error } = await client
     .from('transactions')
     .select('*')
+    .neq('id', 'sys_payment_methods')
+    .neq('source', 'system')
     .order('date', { ascending: false });
 
   if (error) {
@@ -129,36 +189,38 @@ export async function fetchTransactionsFromSupabase() {
     return null;
   }
 
-  // Normalize field names (snake_case to camelCase)
-  return (data || []).map(t => {
-    let targetPaymentMethod = null;
-    let cleanNotes = (t.notes || '').trim();
-    const toMatch = cleanNotes.match(/\[to:([^\]]+)\]/i);
-    if (toMatch) {
-      targetPaymentMethod = toMatch[1].trim();
-      cleanNotes = cleanNotes.replace(/\[to:[^\]]*\]/gi, '').trim();
-    }
-    // Auto-infer for Tabungan Lily
-    if (!targetPaymentMethod && (t.title?.toLowerCase().includes('tabungan lily') || cleanNotes.toLowerCase().includes('tabungan lily'))) {
-      targetPaymentMethod = 'BCA';
-    }
+  // Filter out system rows and normalize field names (snake_case to camelCase)
+  return (data || [])
+    .filter(t => t.id !== 'sys_payment_methods' && t.type !== 'system' && t.source !== 'system')
+    .map(t => {
+      let targetPaymentMethod = null;
+      let cleanNotes = (t.notes || '').trim();
+      const toMatch = cleanNotes.match(/\[to:([^\]]+)\]/i);
+      if (toMatch) {
+        targetPaymentMethod = toMatch[1].trim();
+        cleanNotes = cleanNotes.replace(/\[to:[^\]]*\]/gi, '').trim();
+      }
+      // Auto-infer for Tabungan Lily
+      if (!targetPaymentMethod && (t.title?.toLowerCase().includes('tabungan lily') || cleanNotes.toLowerCase().includes('tabungan lily'))) {
+        targetPaymentMethod = 'BCA';
+      }
 
-    return {
-      id: t.id,
-      title: t.title,
-      amount: Number(t.amount),
-      type: targetPaymentMethod ? 'transfer' : t.type,
-      category: t.category,
-      date: t.date,
-      time: t.time || '',
-      paymentMethod: t.payment_method || 'BSI',
-      targetPaymentMethod: targetPaymentMethod || undefined,
-      notes: cleanNotes,
-      recurringId: t.recurring_id ? (isNaN(t.recurring_id) ? t.recurring_id : Number(t.recurring_id)) : null,
-      source: t.source || 'manual',
-      createdAt: t.created_at || new Date().toISOString()
-    };
-  });
+      return {
+        id: t.id,
+        title: t.title,
+        amount: Number(t.amount),
+        type: targetPaymentMethod ? 'transfer' : t.type,
+        category: t.category,
+        date: t.date,
+        time: t.time || '',
+        paymentMethod: t.payment_method || 'BSI',
+        targetPaymentMethod: targetPaymentMethod || undefined,
+        notes: cleanNotes,
+        recurringId: t.recurring_id ? (isNaN(t.recurring_id) ? t.recurring_id : Number(t.recurring_id)) : null,
+        source: t.source || 'manual',
+        createdAt: t.created_at || new Date().toISOString()
+      };
+    });
 }
 
 export async function insertTransactionToSupabase(tx) {

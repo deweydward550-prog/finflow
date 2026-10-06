@@ -24,7 +24,8 @@ import {
   deleteRecurringFromSupabase,
   fetchRecurringPaymentsFromSupabase,
   insertRecurringPaymentToSupabase,
-  deleteRecurringPaymentsByTxId
+  deleteRecurringPaymentsByTxId,
+  fetchPaymentMethodsFromSupabase
 } from './services/supabaseService';
 import './App.css';
 
@@ -94,11 +95,12 @@ export default function App() {
       setIsSupabaseConnected(cfg.isConfigured);
 
       if (cfg.isConfigured) {
-        // 1. Primary: Fetch from Supabase Cloud
+        // 1. Primary: Fetch from Supabase Cloud (Transactions, Recurring, Payments, & Account Balances)
         const [cloudTxs, cloudRecurring, cloudPayments] = await Promise.all([
           fetchTransactionsFromSupabase(),
           fetchRecurringFromSupabase(),
-          fetchRecurringPaymentsFromSupabase()
+          fetchRecurringPaymentsFromSupabase(),
+          fetchPaymentMethodsFromSupabase()
         ]);
 
         if (cloudTxs !== null && cloudRecurring !== null && cloudPayments !== null) {
