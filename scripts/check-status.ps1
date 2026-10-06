@@ -1,11 +1,10 @@
-# FinFlow Bot and Server Diagnostic Status Checker
+# FinFlow Bot and Supabase Diagnostic Status Checker
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-$Host.UI.RawUI.WindowTitle = "FinFlow Bot and Tunnel Status Checker"
+$Host.UI.RawUI.WindowTitle = "FinFlow WhatsApp Bot & Supabase Monitor"
 
 $PORT = 5051
 $LOCAL_URL = "http://127.0.0.1:$PORT"
-$TUNNEL_URL = "https://finflow-dewey-bot.loca.lt"
 $LOG_FILE = "$PSScriptRoot\..\server\data\bot.log"
 $AUTH_DIR = "$PSScriptRoot\..\server\auth_info_baileys"
 $ROOT_DIR = (Resolve-Path "$PSScriptRoot\..").Path
@@ -13,28 +12,18 @@ $ROOT_DIR = (Resolve-Path "$PSScriptRoot\..").Path
 function Show-Header {
     Clear-Host
     Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "             FINFLOW WHATSAPP BOT & SERVER MONITOR             " -ForegroundColor Yellow
+    Write-Host "             FINFLOW WHATSAPP BOT & SUPABASE HUB               " -ForegroundColor Yellow
     Write-Host "================================================================" -ForegroundColor Cyan
     Write-Host ""
 }
 
 function Get-ServerStatus {
     try {
-        $headers = @{ "Bypass-Tunnel-Reminder" = "true" }
-        $res = Invoke-RestMethod -Uri "$LOCAL_URL/api/status" -TimeoutSec 3 -Headers $headers -ErrorAction Stop
+        $res = Invoke-RestMethod -Uri "$LOCAL_URL/api/status" -TimeoutSec 3 -ErrorAction Stop
         return $res
     } catch {
         return $null
     }
-}
-
-function Test-TunnelStatus {
-    try {
-        $headers = @{ "Bypass-Tunnel-Reminder" = "true" }
-        $res = Invoke-RestMethod -Uri "$TUNNEL_URL/api/status" -TimeoutSec 4 -Headers $headers -ErrorAction Stop
-        if ($res.ok) { return $true }
-    } catch {}
-    return $false
 }
 
 function Format-Uptime([int]$seconds) {
@@ -48,7 +37,7 @@ function Format-Uptime([int]$seconds) {
 }
 
 function Start-FinFlowSilent {
-    Write-Host "Memulai FinFlow Bot dan Tunnel di latar belakang..." -ForegroundColor Yellow
+    Write-Host "Memulai FinFlow Bot di latar belakang..." -ForegroundColor Yellow
     $vbsPath = "$ROOT_DIR\JALANKAN-FINFLOW-BOT.vbs"
     if (Test-Path $vbsPath) {
         Start-Process "wscript.exe" -ArgumentList "`"$vbsPath`""
@@ -70,7 +59,6 @@ function Reset-WhatsAppSession {
     try {
         Invoke-RestMethod -Uri "$LOCAL_URL/api/auth/reset" -Method Post -TimeoutSec 5 -ErrorAction SilentlyContinue
     } catch {
-        # If server not responding, manual wipe
         if (Test-Path $AUTH_DIR) {
             Get-ChildItem -Path $AUTH_DIR -Recurse | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
         }
@@ -81,27 +69,10 @@ function Reset-WhatsAppSession {
 
 function Show-QRCodeTerminal {
     Clear-Host
-    Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "                   SCAN QR CODE WHATSAPP BOT                   " -ForegroundColor Yellow
-    Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host ""
-    $status = Get-ServerStatus
-    if ($null -eq $status -or $status.status -ne "qr") {
-        if ($status.status -eq "connected") {
-            Write-Host "WhatsApp sudah TERHUBUNG! ($($status.botNumber))" -ForegroundColor Green
-        } else {
-            Write-Host "QR Code belum siap atau server offline. Silakan coba sesaat lagi." -ForegroundColor Yellow
-        }
-        Write-Host "`nTekan tombol apa saja untuk kembali..." -ForegroundColor Gray
-        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        return
-    }
-
-    Write-Host "Membuka halaman scan QR di browser default..." -ForegroundColor Yellow
+    Write-Host "Membuka scanner QR di browser default..." -ForegroundColor Yellow
     Start-Process "http://localhost:$PORT/qr"
-    Write-Host "Halaman scanner QR telah dibuka di browser (http://localhost:$PORT/qr)." -ForegroundColor Green
-    Write-Host "`nTekan tombol apa saja untuk kembali ke menu..." -ForegroundColor Gray
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Write-Host "Dashboard QR dibuka di browser (http://localhost:$PORT/qr)." -ForegroundColor Green
+    Start-Sleep -Seconds 2
 }
 
 function Show-Logs {
@@ -126,8 +97,6 @@ while ($true) {
         Write-Host "  [x] Server Bot Lokal     : " -NoNewline
         Write-Host "TIDAK AKTIF (OFFLINE)" -ForegroundColor Red
         Write-Host "  [x] WhatsApp Bot         : " -NoNewline
-        Write-Host "OFFLINE" -ForegroundColor Red
-        Write-Host "  [x] HTTPS Tunnel (Vercel): " -NoNewline
         Write-Host "OFFLINE" -ForegroundColor Red
         Write-Host ""
         Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
@@ -165,51 +134,22 @@ while ($true) {
             Write-Host "$($status.status.ToUpper())" -ForegroundColor Yellow
         }
 
-        # Wi-Fi LAN
-        $localIp = if ($status.localIp) { $status.localIp } else { "192.168.0.2" }
-        Write-Host "  [v] Wi-Fi LAN (HP Lokal) : " -NoNewline
-        Write-Host "http://$localIp:5051" -ForegroundColor Cyan -NoNewline
-        Write-Host " (0ms Latensi / Sangat Cepat)" -ForegroundColor DarkGray
-
-        # Web QR Scanner
-        Write-Host "  [v] Web QR Scanner       : " -NoNewline
-        Write-Host "http://localhost:5051/qr" -ForegroundColor Yellow
-
-        # Tunnel
-        $tunnelActive = Test-TunnelStatus
-        Write-Host "  [v] HTTPS Tunnel (Online): " -NoNewline
-        if ($tunnelActive) {
-            Write-Host "AKTIF " -ForegroundColor Green -NoNewline
-            Write-Host "($TUNNEL_URL)" -ForegroundColor Cyan
-        } elseif ($status.tunnelStatus -eq "active") {
-            Write-Host "AKTIF SERVER " -ForegroundColor Green -NoNewline
-            Write-Host "($TUNNEL_URL)" -ForegroundColor DarkGray
-        } else {
-            Write-Host "STANDBY " -ForegroundColor Yellow -NoNewline
-            Write-Host "(Telegram Cloud & Wi-Fi LAN Aktif)" -ForegroundColor DarkGray
-        }
-
-        # Telegram
-        Write-Host "  [v] Cloud DB (Telegram)  : " -NoNewline
-        if ($status.telegramConfigured) {
+        # Supabase
+        Write-Host "  [v] Supabase Cloud DB    : " -NoNewline
+        if ($status.supabaseConfigured) {
             Write-Host "TERHUBUNG & AKTIF" -ForegroundColor Green
         } else {
-            Write-Host "BELUM DIKONFIGURASI" -ForegroundColor DarkGray
+            Write-Host "BELUM DIKONFIGURASI (Atur di http://localhost:5051)" -ForegroundColor Yellow
         }
 
-        # Primary Account
-        Write-Host "  [v] Rekening Utama       : " -NoNewline
-        Write-Host "$($status.primaryAccount)" -ForegroundColor Yellow
-
-        # Pending Queue
-        if ($status.pendingCount -gt 0) {
-            Write-Host "  [i] Antrean Transaksi    : $($status.pendingCount) transaksi siap diimpor" -ForegroundColor Yellow
-        }
+        # Web QR Scanner
+        Write-Host "  [v] Web Dashboard        : " -NoNewline
+        Write-Host "http://localhost:5051/qr" -ForegroundColor Yellow
 
         Write-Host ""
         Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
         if ($status.status -eq "connected") {
-            Write-Host "Status: BOT WHATSAPP AKTIF! Chat transaksi otomatis masuk ke Telegram." -ForegroundColor Green
+            Write-Host "Status: BOT WA AKTIF! Chat otomatis tersimpan ke Supabase Cloud." -ForegroundColor Green
         } elseif ($status.status -eq "qr") {
             Write-Host "Status: MENUNGGU SCAN QR! Buka http://localhost:5051/qr di browser Anda." -ForegroundColor Yellow
         } else {
@@ -218,9 +158,9 @@ while ($true) {
         Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
         Write-Host ""
         Write-Host "  [1] Refresh Status"
-        Write-Host "  [2] Buka Scanner QR di Browser (http://localhost:5051/qr)" -ForegroundColor Green
+        Write-Host "  [2] Buka Dashboard QR di Browser (http://localhost:5051/qr)" -ForegroundColor Green
         Write-Host "  [3] Lihat Log Real-time (bot.log)"
-        Write-Host "  [4] Reset Sesi WhatsApp (Hapus Cache & Scan Ulang)"
+        Write-Host "  [4] Reset Sesi WhatsApp (Scan Ulang)"
         Write-Host "  [5] Restart Bot & Server"
         Write-Host "  [6] Hentikan Bot (Stop Server)"
         Write-Host "  [7] Buka Web FinFlow di Browser"
@@ -228,8 +168,10 @@ while ($true) {
         Write-Host ""
         $choice = Read-Host "Pilih menu (1-8)"
 
-        if ($choice -eq "2") {
-            Start-Process "http://localhost:$PORT/qr"
+        if ($choice -eq "1") {
+            # continue loop
+        } elseif ($choice -eq "2") {
+            Show-QRCodeTerminal
         } elseif ($choice -eq "3") {
             Show-Logs
         } elseif ($choice -eq "4") {

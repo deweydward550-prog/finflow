@@ -6,19 +6,18 @@
   "scripts": {
     "dev": "vite",
     "bot": "node server/bot.js",
-    "tunnel": "npx localtunnel --port 5051 --local-host 127.0.0.1 --subdomain finflow-dewey-bot",
     "server": "node server/bot.js",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "canvas-confetti": "^1.9.4",
     "cors": "^2.8.6",
     "dexie": "^4.4.6",
     "express": "^5.2.1",
-    "localtunnel": "^2.0.2",
     "lucide-react": "^1.51.0",
     "pino": "^10.4.0",
     "qrcode": "^1.5.4",

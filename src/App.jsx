@@ -12,10 +12,20 @@ import SettingsModal from './components/SettingsModal';
 import ConfirmDialog from './components/ConfirmDialog';
 import Toast from './components/Toast';
 import { 
-  pushDatabaseToTelegram, pullDatabaseFromTelegram, 
-  getTelegramConfig, initTelegramAutoSync 
-} from './services/telegramDb';
-import { initWhatsAppSync } from './services/whatsappSync';
+  getSupabaseConfig, 
+  subscribeToRealtime,
+  fetchTransactionsFromSupabase,
+  insertTransactionToSupabase,
+  updateTransactionInSupabase,
+  deleteTransactionFromSupabase,
+  fetchRecurringFromSupabase,
+  insertRecurringToSupabase,
+  updateRecurringInSupabase,
+  deleteRecurringFromSupabase,
+  fetchRecurringPaymentsFromSupabase,
+  insertRecurringPaymentToSupabase,
+  deleteRecurringPaymentsByTxId
+} from './services/supabaseService';
 import './App.css';
 
 export default function App() {
@@ -32,7 +42,7 @@ export default function App() {
   const [recurringList, setRecurringList] = useState([]);
   const [recurringPayments, setRecurringPayments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState(() => getSupabaseConfig().isConfigured);
 
   // Modals
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -77,22 +87,41 @@ export default function App() {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  // Load all DB data with proactive cloud check on boot
+  // Load all DB data (Supabase primary + Dexie offline fallback)
   const loadData = useCallback(async () => {
     try {
-      // Check if local database has records
+      const cfg = getSupabaseConfig();
+      setIsSupabaseConnected(cfg.isConfigured);
+
+      if (cfg.isConfigured) {
+        // 1. Primary: Fetch from Supabase Cloud
+        const [cloudTxs, cloudRecurring, cloudPayments] = await Promise.all([
+          fetchTransactionsFromSupabase(),
+          fetchRecurringFromSupabase(),
+          fetchRecurringPaymentsFromSupabase()
+        ]);
+
+        if (cloudTxs !== null && cloudRecurring !== null && cloudPayments !== null) {
+          setAllTransactions(cloudTxs);
+          setRecurringList(cloudRecurring);
+          setRecurringPayments(cloudPayments);
+
+          // Update Dexie local cache in background
+          try {
+            await db.transactions.clear();
+            if (cloudTxs.length > 0) await db.transactions.bulkAdd(cloudTxs);
+            await db.recurringExpenses.clear();
+            if (cloudRecurring.length > 0) await db.recurringExpenses.bulkAdd(cloudRecurring);
+            await db.recurringPayments.clear();
+            if (cloudPayments.length > 0) await db.recurringPayments.bulkAdd(cloudPayments);
+          } catch {}
+          return;
+        }
+      }
+
+      // 2. Fallback: Load from local Dexie database
       const txCount = await db.transactions.count();
       if (txCount === 0) {
-        // Attempt to pull latest state directly from cloud before seeding sample dummy data
-        try {
-          const cloudRes = await pullDatabaseFromTelegram(true);
-          if (!cloudRes || !cloudRes.success) {
-            await seedInitialDataIfEmpty();
-          }
-        } catch {
-          await seedInitialDataIfEmpty();
-        }
-      } else {
         await seedInitialDataIfEmpty();
       }
       
@@ -100,44 +129,9 @@ export default function App() {
       const recurring = await db.recurringExpenses.toArray();
       const payments = await db.recurringPayments.toArray();
 
-      // Auto-align recurring templates and legacy recurring transactions to current Primary Account if they have default BCA
-      const primary = getPrimaryPaymentMethod();
-      const primaryName = primary ? primary.name : 'BSI';
-      if (primaryName !== 'BCA') {
-        for (const r of recurring) {
-          if (r.paymentMethod === 'BCA' || !r.paymentMethod) {
-            r.paymentMethod = primaryName;
-            await db.recurringExpenses.update(r.id, { paymentMethod: primaryName });
-          }
-        }
-        for (const t of txs) {
-          if (t.recurringId && (t.paymentMethod === 'BCA' || !t.paymentMethod)) {
-            t.paymentMethod = primaryName;
-            await db.transactions.update(t.id, { paymentMethod: primaryName });
-          }
-        }
-      }
-
-      // Clean orphaned payments whose transaction was deleted
-      const txIdSet = new Set(txs.map(t => t.id));
-      const orphanedPaymentIds = [];
-      const validPayments = [];
-
-      for (const p of payments) {
-        if (p.transactionId && !txIdSet.has(p.transactionId)) {
-          orphanedPaymentIds.push(p.id);
-        } else {
-          validPayments.push(p);
-        }
-      }
-
-      if (orphanedPaymentIds.length > 0) {
-        await db.recurringPayments.bulkDelete(orphanedPaymentIds);
-      }
-
       setAllTransactions(txs);
       setRecurringList(recurring);
-      setRecurringPayments(validPayments);
+      setRecurringPayments(payments);
     } catch (err) {
       console.error('Failed to load database:', err);
     } finally {
@@ -145,32 +139,23 @@ export default function App() {
     }
   }, []);
 
-  // Real-time Telegram Cloud Sync Listener & Background Worker (Instant sync across devices)
+  // Real-time Supabase WebSocket Listener (Instant sync across HP A, HP B, PC, Bot)
   useEffect(() => {
-    const cleanup = initTelegramAutoSync({
-      onDataUpdated: () => {
-        loadData();
-        showToast('☁️ Data keuangan tersinkronisasi otomatis dari Cloud!', 'info');
-      },
-      onSyncStateChange: (syncing) => {
-        setIsCloudSyncing(syncing);
-      }
+    const cleanup = subscribeToRealtime(() => {
+      loadData();
+      showToast('⚡ Data tersinkronisasi instan via Supabase!', 'info');
     });
-    return cleanup;
-  }, [loadData, showToast]);
 
-  // Real-time WhatsApp Bot Sync Listener
-  useEffect(() => {
-    const cleanup = initWhatsAppSync({
-      onNewTransactions: (items) => {
-        loadData();
-        showToast(`💬 ${items.length} transaksi baru berhasil diinput dari WhatsApp!`, 'success');
-      },
-      onServerDiscovered: (url) => {
-        showToast(`📶 Terhubung otomatis ke Bot Server di Wi-Fi: ${url}`, 'info');
-      }
-    });
-    return cleanup;
+    const handleConfigChange = () => {
+      setIsSupabaseConnected(getSupabaseConfig().isConfigured);
+      loadData();
+    };
+
+    window.addEventListener('finflow_supabase_config_updated', handleConfigChange);
+    return () => {
+      cleanup();
+      window.removeEventListener('finflow_supabase_config_updated', handleConfigChange);
+    };
   }, [loadData, showToast]);
 
   useEffect(() => {
@@ -184,15 +169,15 @@ export default function App() {
       .sort((a, b) => b.date.localeCompare(a.date) || (b.time || '').localeCompare(a.time || ''));
   }, [allTransactions, selectedMonthYear]);
 
-  // Map of recurring payments (only valid if linked transaction exists)
+  // Map of recurring payments
   const currentMonthPaymentsMap = useMemo(() => {
     const map = {};
-    const txIdSet = new Set(allTransactions.map(t => t.id));
+    const txIdSet = new Set(allTransactions.map(t => String(t.id)));
 
     recurringPayments
       .filter(p => p.monthYear === selectedMonthYear)
       .forEach(p => {
-        if (!p.transactionId || txIdSet.has(p.transactionId)) {
+        if (!p.transactionId || txIdSet.has(String(p.transactionId))) {
           map[p.recurringId] = p;
         }
       });
@@ -230,35 +215,35 @@ export default function App() {
     };
   }, [allTransactions, selectedMonthYear]);
 
-  // Telegram Auto-Sync helper
-  const triggerTelegramSync = async () => {
-    try {
-      const config = getTelegramConfig();
-      if (config.botToken && config.chatId && config.autoSync) {
-        await pushDatabaseToTelegram();
-      }
-    } catch (err) {
-      console.warn('Auto sync to Telegram skipped/failed:', err);
-    }
-  };
-
   // Transaction Handlers
   const handleSaveTransaction = async (txData) => {
     try {
-      if (txData.id) {
-        await db.transactions.update(txData.id, txData);
-        showToast('Transaksi diperbarui!', 'success');
+      const cfg = getSupabaseConfig();
+      if (cfg.isConfigured) {
+        if (txData.id) {
+          await updateTransactionInSupabase(txData.id, txData);
+          showToast('Transaksi diperbarui di Supabase!', 'success');
+        } else {
+          await insertTransactionToSupabase(txData);
+          showToast('Transaksi disimpan ke Supabase!', 'success');
+        }
       } else {
-        await db.transactions.add({
-          ...txData,
-          createdAt: new Date().toISOString()
-        });
-        showToast('Transaksi dicatat!', 'success');
+        // Local Dexie save
+        if (txData.id) {
+          await db.transactions.update(txData.id, txData);
+          showToast('Transaksi diperbarui!', 'success');
+        } else {
+          await db.transactions.add({
+            ...txData,
+            createdAt: new Date().toISOString()
+          });
+          showToast('Transaksi dicatat!', 'success');
+        }
       }
+
       setIsTxModalOpen(false);
       setEditingTx(null);
       await loadData();
-      triggerTelegramSync();
     } catch (err) {
       showToast('Gagal menyimpan: ' + err.message, 'error');
     }
@@ -276,24 +261,34 @@ export default function App() {
   // Recurring Handlers
   const handleSaveRecurring = async (recData) => {
     try {
-      if (recData.id) {
-        await db.recurringExpenses.update(recData.id, recData);
-        showToast('Tagihan diperbarui!', 'success');
+      const cfg = getSupabaseConfig();
+      if (cfg.isConfigured) {
+        if (recData.id) {
+          await updateRecurringInSupabase(recData.id, recData);
+          showToast('Tagihan diperbarui di Supabase!', 'success');
+        } else {
+          await insertRecurringToSupabase(recData);
+          showToast('Tagihan baru ditambahkan ke Supabase!', 'success');
+        }
       } else {
-        await db.recurringExpenses.add(recData);
-        showToast('Tagihan baru ditambahkan!', 'success');
+        if (recData.id) {
+          await db.recurringExpenses.update(recData.id, recData);
+          showToast('Tagihan diperbarui!', 'success');
+        } else {
+          await db.recurringExpenses.add(recData);
+          showToast('Tagihan baru ditambahkan!', 'success');
+        }
       }
+
       setIsRecurringModalOpen(false);
       setEditingRecurring(null);
       
-      // If user opened this from manage modal, reopen manage modal smoothly
       if (returnToManage) {
         setIsManageRecurringOpen(true);
         setReturnToManage(false);
       }
 
       await loadData();
-      triggerTelegramSync();
     } catch (err) {
       showToast('Gagal menyimpan tagihan: ' + err.message, 'error');
     }
@@ -323,26 +318,27 @@ export default function App() {
     const { type, item } = deleteConfirm;
 
     try {
+      const cfg = getSupabaseConfig();
       if (type === 'transaction') {
-        await db.transactions.delete(item.id);
-        if (item.recurringId) {
-          const monthYear = item.date ? item.date.substring(0, 7) : selectedMonthYear;
-          await db.recurringPayments
-            .where('recurringId')
-            .equals(Number(item.recurringId))
-            .and(p => p.monthYear === monthYear)
-            .delete();
+        if (cfg.isConfigured) {
+          await deleteTransactionFromSupabase(item.id);
+          await deleteRecurringPaymentsByTxId(item.id);
+        } else {
+          await db.transactions.delete(item.id);
+          await db.recurringPayments.where('transactionId').equals(item.id).delete();
         }
-        await db.recurringPayments.where('transactionId').equals(item.id).delete();
         showToast('Transaksi berhasil dihapus', 'info');
       } else if (type === 'recurring') {
-        await db.recurringExpenses.delete(item.id);
-        await db.recurringPayments.where('recurringId').equals(item.id).delete();
+        if (cfg.isConfigured) {
+          await deleteRecurringFromSupabase(item.id);
+        } else {
+          await db.recurringExpenses.delete(item.id);
+          await db.recurringPayments.where('recurringId').equals(item.id).delete();
+        }
         showToast('Tagihan rutin berhasil dihapus', 'info');
       }
       setDeleteConfirm(null);
       await loadData();
-      triggerTelegramSync();
     } catch (err) {
       showToast('Gagal menghapus: ' + err.message, 'error');
     }
@@ -361,16 +357,40 @@ export default function App() {
         ? recurringItem.paymentMethod
         : primaryName;
 
-      await markRecurringExpensePaid({
-        recurring: recurringItem,
-        monthYear: selectedMonthYear,
-        paidDate,
-        paymentMethod: targetMethod
-      });
+      const cfg = getSupabaseConfig();
+      if (cfg.isConfigured) {
+        // Insert transaction into Supabase
+        const txPayload = {
+          title: recurringItem.title,
+          amount: recurringItem.amount,
+          type: 'expense',
+          category: recurringItem.category,
+          date: paidDate,
+          time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+          paymentMethod: targetMethod,
+          notes: `Pembayaran Rutin Bulanan (${recurringItem.title})`,
+          recurringId: recurringItem.id
+        };
+        const createdTx = await insertTransactionToSupabase(txPayload);
+
+        // Record payment in Supabase
+        await insertRecurringPaymentToSupabase({
+          recurringId: recurringItem.id,
+          monthYear: selectedMonthYear,
+          paidDate,
+          transactionId: createdTx?.id || null
+        });
+      } else {
+        await markRecurringExpensePaid({
+          recurring: recurringItem,
+          monthYear: selectedMonthYear,
+          paidDate,
+          paymentMethod: targetMethod
+        });
+      }
 
       showToast(`⚔️ Misi "${recurringItem.title}" selesai! (${targetMethod})`, 'success');
       await loadData();
-      triggerTelegramSync();
     } catch (err) {
       showToast('Gagal menandai lunas: ' + err.message, 'error');
     }
@@ -384,7 +404,7 @@ export default function App() {
         setSelectedMonthYear={setSelectedMonthYear}
         theme={theme}
         toggleTheme={toggleTheme}
-        isCloudSyncing={isCloudSyncing}
+        isSupabaseConnected={isSupabaseConnected}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenNewTransaction={() => {
           setEditingTx(null);
@@ -458,19 +478,22 @@ export default function App() {
         isOpen={isManageRecurringOpen}
         onClose={() => setIsManageRecurringOpen(false)}
         recurringList={recurringList}
-        onOpenNewRecurring={() => {
+        recurringPaymentsMap={currentMonthPaymentsMap}
+        selectedMonthYear={selectedMonthYear}
+        onAddNew={() => {
+          setReturnToManage(true);
+          setIsManageRecurringOpen(false);
           setEditingRecurring(null);
-          setIsManageRecurringOpen(false);
-          setReturnToManage(true);
           setIsRecurringModalOpen(true);
         }}
-        onEditRecurring={(item) => {
+        onEdit={(item) => {
+          setReturnToManage(true);
+          setIsManageRecurringOpen(false);
           setEditingRecurring(item);
-          setIsManageRecurringOpen(false);
-          setReturnToManage(true);
           setIsRecurringModalOpen(true);
         }}
-        onDeleteRecurring={promptDeleteRecurring}
+        onDelete={promptDeleteRecurring}
+        onTogglePaid={handleMarkRecurringPaid}
       />
 
       {/* Settings Modal */}
@@ -478,23 +501,27 @@ export default function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onDataChanged={loadData}
-        showToast={showToast}
       />
 
-      {/* Dedicated Custom Confirm Dialog */}
+      {/* Delete Confirmation Dialog */}
       <ConfirmDialog 
         isOpen={!!deleteConfirm}
-        onClose={() => setDeleteConfirm(null)}
+        title={deleteConfirm?.title || 'Hapus Data'}
+        message={deleteConfirm?.message || 'Apakah Anda yakin?'}
+        confirmLabel="Hapus"
+        isDanger={true}
         onConfirm={handleConfirmDelete}
-        title={deleteConfirm?.title || 'Konfirmasi Hapus'}
-        message={deleteConfirm?.message || 'Apakah Anda yakin ingin menghapus data ini?'}
-        item={deleteConfirm?.item}
-        confirmText="Ya, Hapus"
-        cancelText="Batal"
+        onCancel={() => setDeleteConfirm(null)}
       />
 
-      <Toast toast={toast} onClose={() => setToast(null)} />
+      {/* Global Toast */}
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)} 
+        />
+      )}
     </div>
   );
 }
-

@@ -2,75 +2,47 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Database, Download, Upload, RefreshCw, 
   ShieldCheck, HardDrive, Check, AlertTriangle, Sparkles, 
-  Send, Bot, Cloud, CheckCircle2, AlertCircle, HelpCircle,
-  ExternalLink, Eye, EyeOff, CreditCard, ChevronRight, ChevronLeft,
-  Plus, Edit2, Trash2, Banknote, Smartphone, Wallet, Star,
-  MessageCircle, Terminal, Copy, Zap
+  CheckCircle2, AlertCircle, HelpCircle, ExternalLink, Eye, EyeOff, 
+  CreditCard, ChevronRight, ChevronLeft, Plus, Edit2, Trash2, 
+  Banknote, Smartphone, Wallet, Star, MessageCircle, Terminal, Copy, Zap
 } from 'lucide-react';
 import { 
-  getTelegramConfig, saveTelegramConfig, testTelegramConnection, 
-  pushDatabaseToTelegram, pullDatabaseFromTelegram 
-} from '../services/telegramDb';
+  getSupabaseConfig, saveSupabaseConfig, testSupabaseConnection, 
+  migrateLocalDataToSupabase, SUPABASE_SQL_SCHEMA, insertTransactionToSupabase 
+} from '../services/supabaseService';
 import { 
   exportDatabaseToJson, importDatabaseFromJson, resetDatabaseToSample,
   clearAllDatabaseData, getCustomPaymentMethods, saveCustomPaymentMethods,
-  setPrimaryPaymentMethod, DEFAULT_PAYMENT_METHODS
+  setPrimaryPaymentMethod, DEFAULT_PAYMENT_METHODS, db
 } from '../db/db';
-import { 
-  testSendManualChat, getBotServerUrl, setBotServerUrl, 
-  PERMANENT_BOT_URL, LOCAL_WIFI_BOT_URL, autoDiscoverLocalBotServer 
-} from '../services/whatsappSync';
+import { parseWhatsAppMessage } from '../services/whatsappParser';
 
 export default function SettingsModal({
   isOpen,
   onClose,
-  onDataChanged,
-  showToast
+  onDataChanged
 }) {
   if (!isOpen) return null;
 
-  // Navigation View: 'main' | 'connection' | 'payment_methods' | 'whatsapp_bot' | 'data'
+  // Navigation View: 'main' | 'supabase' | 'whatsapp_bot' | 'payment_methods' | 'data'
   const [currentView, setCurrentView] = useState('main');
 
   const [loading, setLoading] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
-  const [pushingToTg, setPushingToTg] = useState(false);
-  const [pullingFromTg, setPullingFromTg] = useState(false);
-  
-  // Telegram Config State
-  const [botToken, setBotToken] = useState('');
-  const [chatId, setChatId] = useState('');
-  const [autoSync, setAutoSync] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
-  const [lastSynced, setLastSynced] = useState(null);
-  const [showToken, setShowToken] = useState(false);
-  const [showGuide, setShowGuide] = useState(false);
+  const [migratingData, setMigratingData] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
 
-  // WhatsApp Bot State
-  const [serverUrlInput, setServerUrlInput] = useState(() => getBotServerUrl());
-  const [waServerStatus, setWaServerStatus] = useState({ ok: false, status: 'checking' });
-  const [testChatText, setTestChatText] = useState('naspad 13000 / bensin 20.000 / cukur 25k');
+  // Supabase Config State
+  const [supabaseUrl, setSupabaseUrl] = useState('');
+  const [supabaseKey, setSupabaseKey] = useState('');
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+  const [showSqlGuide, setShowSqlGuide] = useState(false);
+
+  // WhatsApp Simulator State
+  const [testChatText, setTestChatText] = useState('naspad 13000 sea / bensin 30k bsi / kopi 18k');
   const [isSendingTestChat, setIsSendingTestChat] = useState(false);
-  const [isScanningNetwork, setIsScanningNetwork] = useState(false);
-  const [scanProgressText, setScanProgressText] = useState('');
   const [showWaGuide, setShowWaGuide] = useState(false);
-
-  const refreshWaStatus = async (customUrl) => {
-    const urlToUse = (customUrl !== undefined ? customUrl : serverUrlInput) || getBotServerUrl();
-    try {
-      const res = await fetch(`${urlToUse}/api/status`, {
-        headers: { 'Bypass-Tunnel-Reminder': 'true' }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setWaServerStatus(data);
-        return;
-      }
-    } catch {
-      // Offline / blocked
-    }
-    setWaServerStatus({ ok: false, status: 'offline' });
-  };
 
   // Payment Methods State
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -83,160 +55,100 @@ export default function SettingsModal({
 
   const fileInputRef = useRef(null);
 
-  // Listen to auto-discovered server event
-  useEffect(() => {
-    const handleDiscovered = (e) => {
-      if (e.detail?.url) {
-        setServerUrlInput(e.detail.url);
-        refreshWaStatus(e.detail.url);
-      }
-    };
-    window.addEventListener('finflow_bot_server_discovered', handleDiscovered);
-    return () => {
-      window.removeEventListener('finflow_bot_server_discovered', handleDiscovered);
-    };
-  }, []);
-
-  // Scan local Wi-Fi range 192.168.0.0 - 192.168.0.255 ascending
-  const handleScanLocalNetwork = async () => {
-    try {
-      setIsScanningNetwork(true);
-      setScanProgressText('Memulai pencarian IP (192.168.0.1 - 254)...');
-      const foundUrl = await autoDiscoverLocalBotServer((progress) => {
-        if (progress.status) {
-          setScanProgressText(progress.status);
-        }
-      });
-      if (foundUrl) {
-        setServerUrlInput(foundUrl);
-        refreshWaStatus(foundUrl);
-        showToast(`🎯 Ditemukan WhatsApp Bot Server di ${foundUrl}!`, 'success');
-      } else {
-        showToast('⚠️ Tidak ditemukan server bot aktif di rentang IP 192.168.0.0 - 255. Pastikan PC & HP di Wi-Fi yang sama.', 'warning');
-      }
-    } catch (err) {
-      showToast('Gagal memindai jaringan lokal: ' + err.message, 'error');
-    } finally {
-      setIsScanningNetwork(false);
-      setScanProgressText('');
-    }
+  const showToast = (message, type = 'success') => {
+    setToastMessage({ message, type });
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
   // Load configs on open
   useEffect(() => {
-    const config = getTelegramConfig();
-    setBotToken(config.botToken || '');
-    setChatId(config.chatId || '');
-    setAutoSync(config.autoSync !== false);
-    setIsConnected(!!config.isConnected && !!config.botToken && !!config.chatId);
-    setLastSynced(config.lastSynced || null);
-
+    const cfg = getSupabaseConfig();
+    setSupabaseUrl(cfg.url || '');
+    setSupabaseKey(cfg.anonKey || '');
+    setIsSupabaseConnected(cfg.isConfigured);
     setPaymentMethods(getCustomPaymentMethods());
-
-    // Check WhatsApp Server Status
-    const currentUrl = getBotServerUrl();
-    setServerUrlInput(currentUrl);
-    refreshWaStatus(currentUrl);
   }, [isOpen]);
 
-  // Test WhatsApp Chat Input
-  const handleTestSendChat = async (e) => {
-    e.preventDefault();
-    if (!testChatText.trim()) return;
-    try {
-      setIsSendingTestChat(true);
-      const res = await testSendManualChat(testChatText.trim());
-      if (res.ok && res.parsed?.length > 0) {
-        showToast(`✅ ${res.parsed.length} transaksi berhasil diinput via WhatsApp Simulator!`, 'success');
-        await onDataChanged();
-      } else {
-        showToast('Gagal memproses pesan chat: format tidak valid', 'error');
-      }
-    } catch (err) {
-      showToast('Gagal terhubung ke Bot Server: Pastikan server aktif (npm run bot) atau periksa Server URL', 'error');
-    } finally {
-      setIsSendingTestChat(false);
-    }
-  };
-
-  // Save Telegram config
-  const handleSaveConfig = () => {
-    saveTelegramConfig({
-      botToken: botToken.trim(),
-      chatId: chatId.trim(),
-      autoSync
-    });
-    showToast('Konfigurasi Telegram disimpan!', 'success');
-  };
-
-  // Test Telegram Connection
-  const handleTestConnection = async () => {
-    if (!botToken.trim() || !chatId.trim()) {
-      showToast('Masukkan Bot Token dan Chat ID terlebih dahulu', 'error');
+  // Save & Test Supabase Connection
+  const handleSaveAndTestSupabase = async (e) => {
+    e?.preventDefault();
+    if (!supabaseUrl.trim() || !supabaseKey.trim()) {
+      showToast('Masukkan Supabase Project URL dan Anon Key', 'error');
       return;
     }
 
     try {
       setTestingConnection(true);
-      await testTelegramConnection(botToken.trim(), chatId.trim());
-      setIsConnected(true);
-      setLastSynced(new Date().toISOString());
-      showToast('🟢 Berhasil terhubung! Pesan konfirmasi telah dikirim ke Telegram.', 'success');
+      await testSupabaseConnection(supabaseUrl.trim(), supabaseKey.trim());
+      saveSupabaseConfig({ url: supabaseUrl.trim(), anonKey: supabaseKey.trim() });
+      setIsSupabaseConnected(true);
+      showToast('🟢 Berhasil terhubung ke Supabase Realtime Cloud!', 'success');
+      await onDataChanged?.();
     } catch (err) {
-      setIsConnected(false);
-      showToast('❌ Gagal terhubung ke Telegram: ' + err.message, 'error');
+      setIsSupabaseConnected(false);
+      showToast('Gagal terhubung: ' + err.message, 'error');
     } finally {
       setTestingConnection(false);
     }
   };
 
-  // Push full database snapshot to Telegram
-  const handlePushToTelegram = async () => {
-    if (!botToken.trim() || !chatId.trim()) {
-      showToast('Konfigurasikan Bot Token dan Chat ID terlebih dahulu', 'error');
+  // 1-Click Migration
+  const handleMigrateData = async () => {
+    if (!isSupabaseConnected) {
+      showToast('Hubungkan Supabase terlebih dahulu sebelum migrasi', 'error');
       return;
     }
 
-    try {
-      setPushingToTg(true);
-      saveTelegramConfig({ botToken: botToken.trim(), chatId: chatId.trim(), autoSync });
-      const res = await pushDatabaseToTelegram();
-      if (res.success) {
-        setIsConnected(true);
-        setLastSynced(new Date().toISOString());
-        showToast('📦 Database berhasil disimpan & dikirim ke Telegram!', 'success');
+    if (window.confirm('Unggah seluruh catatan transaksi & tagihan lokal ke database Supabase Cloud?')) {
+      try {
+        setMigratingData(true);
+        const res = await migrateLocalDataToSupabase();
+        showToast(`🚀 Migrasi selesai: ${res.txUploaded} transaksi & ${res.recUploaded} tagihan terunggah!`, 'success');
+        await onDataChanged?.();
+      } catch (err) {
+        showToast('Gagal migrasi: ' + err.message, 'error');
+      } finally {
+        setMigratingData(false);
       }
-    } catch (err) {
-      showToast('Gagal menyimpan ke Telegram: ' + err.message, 'error');
-    } finally {
-      setPushingToTg(false);
     }
   };
 
-  // Pull database from Telegram
-  const handlePullFromTelegram = async () => {
-    if (!botToken.trim() || !chatId.trim()) {
-      showToast('Konfigurasikan Bot Token dan Chat ID terlebih dahulu', 'error');
-      return;
-    }
+  // Test WhatsApp Chat Simulator
+  const handleTestSendChat = async (e) => {
+    e.preventDefault();
+    if (!testChatText.trim()) return;
 
-    if (window.confirm('Tarik database dari Telegram? Data lokal saat ini akan ditimpa dengan riwayat terbaru dari Telegram.')) {
-      try {
-        setPullingFromTg(true);
-        saveTelegramConfig({ botToken: botToken.trim(), chatId: chatId.trim(), autoSync });
-        const res = await pullDatabaseFromTelegram();
-        if (res.success) {
-          setIsConnected(true);
-          setLastSynced(new Date().toISOString());
-          showToast('📥 Data berhasil dipulihkan dari Telegram!', 'success');
-          await onDataChanged();
-          onClose();
-        }
-      } catch (err) {
-        showToast('Gagal menarik data dari Telegram: ' + err.message, 'error');
-      } finally {
-        setPullingFromTg(false);
+    try {
+      setIsSendingTestChat(true);
+      const accounts = getCustomPaymentMethods();
+      const primary = accounts.find(a => a.isPrimary) || accounts[0];
+      const parsedItems = parseWhatsAppMessage(testChatText.trim(), {
+        primaryAccount: primary ? primary.name : 'BSI',
+        accounts
+      });
+
+      if (!parsedItems || parsedItems.length === 0) {
+        showToast('Format chat tidak dikenali. Contoh: "naspad 13000 sea / bensin 30k"', 'error');
+        return;
       }
+
+      for (const item of parsedItems) {
+        if (isSupabaseConnected) {
+          await insertTransactionToSupabase(item);
+        } else {
+          await db.transactions.add({
+            ...item,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+
+      showToast(`✅ ${parsedItems.length} transaksi berhasil dicatat via Simulator!`, 'success');
+      await onDataChanged?.();
+    } catch (err) {
+      showToast('Gagal memproses simulator: ' + err.message, 'error');
+    } finally {
+      setIsSendingTestChat(false);
     }
   };
 
@@ -259,23 +171,17 @@ export default function SettingsModal({
     setIsAddingMethod(true);
   };
 
-  const handleSetPrimary = (id) => {
-    const updated = setPrimaryPaymentMethod(id);
-    setPaymentMethods(updated);
-    showToast('⭐ Rekening Utama berhasil diatur!', 'success');
-  };
-
   const handleSavePaymentMethod = (e) => {
     e.preventDefault();
     if (!methodName.trim()) {
-      showToast('Masukkan nama rekening / metode pembayaran', 'error');
+      showToast('Nama rekening / metode pembayaran tidak boleh kosong', 'error');
       return;
     }
 
     const icon = methodType === 'cash' ? 'Banknote' : methodType === 'ewallet' ? 'Smartphone' : 'CreditCard';
-    const color = methodType === 'cash' ? '#10B981' : methodType === 'ewallet' ? '#00AA13' : '#0060AF';
+    const color = methodType === 'cash' ? '#059669' : methodType === 'ewallet' ? '#8B5CF6' : '#0060AF';
 
-    let updated;
+    let updated = [];
     if (editingMethod) {
       updated = paymentMethods.map(m => {
         if (m.id === editingMethod.id) {
@@ -283,9 +189,9 @@ export default function SettingsModal({
             ...m,
             name: methodName.trim(),
             icon,
-            color,
+            color: m.color || color,
             number: methodNumber.trim(),
-            isPrimary: methodIsPrimary ? true : (m.isPrimary && !paymentMethods.some(other => other.id !== m.id && other.isPrimary))
+            isPrimary: methodIsPrimary
           };
         }
         return methodIsPrimary ? { ...m, isPrimary: false } : m;
@@ -293,7 +199,7 @@ export default function SettingsModal({
       showToast('Rekening berhasil diperbarui!', 'success');
     } else {
       const newMethod = {
-        id: 'pm_' + Date.now(),
+        id: methodName.trim().toLowerCase().replace(/\s+/g, '_') + '_' + Date.now().toString(36),
         name: methodName.trim(),
         icon,
         color,
@@ -308,7 +214,6 @@ export default function SettingsModal({
       showToast('Rekening baru berhasil ditambahkan!', 'success');
     }
 
-    // Ensure at least one primary
     if (!updated.some(m => m.isPrimary) && updated.length > 0) {
       updated[0].isPrimary = true;
     }
@@ -368,7 +273,7 @@ export default function SettingsModal({
           const content = event.target?.result;
           await importDatabaseFromJson(content);
           showToast('Data berhasil dipulihkan dari backup!', 'success');
-          await onDataChanged();
+          await onDataChanged?.();
           onClose();
         } catch (err) {
           showToast('Format file backup tidak valid: ' + err.message, 'error');
@@ -390,7 +295,7 @@ export default function SettingsModal({
         setLoading(true);
         await resetDatabaseToSample();
         showToast('Database direset ke data contoh bawaan!', 'success');
-        await onDataChanged();
+        await onDataChanged?.();
         onClose();
       } catch (err) {
         showToast('Gagal reset: ' + err.message, 'error');
@@ -407,7 +312,7 @@ export default function SettingsModal({
         setLoading(true);
         await clearAllDatabaseData();
         showToast('Seluruh data berhasil dikosongkan!', 'info');
-        await onDataChanged();
+        await onDataChanged?.();
         onClose();
       } catch (err) {
         showToast('Gagal mengosongkan data: ' + err.message, 'error');
@@ -417,13 +322,12 @@ export default function SettingsModal({
     }
   };
 
-  // Title rendering based on current sub-menu
   const getViewTitle = () => {
     switch (currentView) {
-      case 'connection':
-        return 'Atur Koneksi Telegram';
+      case 'supabase':
+        return 'Koneksi Cloud Supabase';
       case 'whatsapp_bot':
-        return 'WhatsApp Bot Server (Input Chat)';
+        return 'WhatsApp Bot Hub (Auto-Sync)';
       case 'payment_methods':
         return 'Metode Pembayaran / Rekening';
       case 'data':
@@ -447,50 +351,65 @@ export default function SettingsModal({
                   setIsAddingMethod(false);
                   setCurrentView('main');
                 }}
-                title="Kembali ke menu"
-                aria-label="Kembali"
+                title="Kembali"
               >
                 <ChevronLeft size={18} />
               </button>
             )}
             <h3 className="modal-title">{getViewTitle()}</h3>
           </div>
-          <button className="btn-icon-subtle" onClick={onClose} title="Tutup" aria-label="Tutup">
+          <button className="btn-icon-subtle" onClick={onClose} title="Tutup">
             <X size={18} />
           </button>
         </div>
 
+        {/* Modal Inline Toast */}
+        {toastMessage && (
+          <div style={{
+            padding: '0.6rem 1rem',
+            margin: '0.5rem 1.5rem',
+            borderRadius: '10px',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            background: toastMessage.type === 'error' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+            color: toastMessage.type === 'error' ? '#f87171' : '#34d399',
+            border: `1px solid ${toastMessage.type === 'error' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`
+          }}>
+            {toastMessage.message}
+          </div>
+        )}
+
         <div className="modal-body">
           {/* =========================================================
-              1. MAIN SETTINGS LIST (OPSI MENU MENURUN / BARIS)
+              MAIN MENU
               ========================================================= */}
           {currentView === 'main' && (
             <div className="settings-vertical-menu">
-              {/* Row 1: Atur Koneksi Telegram */}
+              {/* Row 1: Supabase Cloud Database */}
               <button 
                 type="button" 
                 className="settings-menu-item-row"
-                onClick={() => setCurrentView('connection')}
+                onClick={() => setCurrentView('supabase')}
               >
                 <div className="settings-menu-left">
-                  <div className="settings-menu-icon-box icon-tg-blue">
-                    <Send size={18} />
+                  <div className="settings-menu-icon-box" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
+                    <Zap size={18} />
                   </div>
                   <div className="settings-menu-info">
-                    <span className="settings-menu-title">Atur Koneksi</span>
-                    <span className="settings-menu-desc">Sinkronisasi bot Telegram & database cloud gratis</span>
+                    <span className="settings-menu-title">Database Cloud Supabase</span>
+                    <span className="settings-menu-desc">Sinkronisasi real-time instan multi-device (HP A, HP B, PC)</span>
                   </div>
                 </div>
 
                 <div className="settings-menu-right">
-                  <span className={`badge ${isConnected ? 'badge-success' : 'badge-neutral'}`}>
-                    {isConnected ? 'Terhubung' : 'Belum Terhubung'}
+                  <span className={`badge ${isSupabaseConnected ? 'badge-success' : 'badge-neutral'}`}>
+                    {isSupabaseConnected ? '🟢 Realtime Aktif' : '⚪ Belum Terhubung'}
                   </span>
                   <ChevronRight size={16} className="text-muted" />
                 </div>
               </button>
 
-              {/* Row 2: WhatsApp Bot Server (Auto-Input Chat) */}
+              {/* Row 2: WhatsApp Bot Hub */}
               <button 
                 type="button" 
                 className="settings-menu-item-row"
@@ -501,56 +420,52 @@ export default function SettingsModal({
                     <MessageCircle size={18} />
                   </div>
                   <div className="settings-menu-info">
-                    <span className="settings-menu-title">WhatsApp Bot Server</span>
-                    <span className="settings-menu-desc">Pencatatan pengeluaran otomatis via chat WhatsApp (Multi-item)</span>
+                    <span className="settings-menu-title">WhatsApp Bot Hub</span>
+                    <span className="settings-menu-desc">Catat pengeluaran otomatis lewat pesan chat WhatsApp</span>
                   </div>
                 </div>
 
                 <div className="settings-menu-right">
-                  <span className={`badge ${waServerStatus.status === 'connected' ? 'badge-success' : waServerStatus.status === 'qr' ? 'badge-warning' : 'badge-neutral'}`}>
-                    {waServerStatus.status === 'connected' ? '🟢 Bot Aktif' : waServerStatus.status === 'qr' ? '🟡 Scan QR' : 'npm run bot'}
-                  </span>
+                  <span className="badge badge-success">🤖 Siap</span>
                   <ChevronRight size={16} className="text-muted" />
                 </div>
               </button>
 
-              {/* Row 3: Atur Metode Pembayaran / Rekening */}
+              {/* Row 3: Metode Pembayaran */}
               <button 
                 type="button" 
                 className="settings-menu-item-row"
                 onClick={() => setCurrentView('payment_methods')}
               >
                 <div className="settings-menu-left">
-                  <div className="settings-menu-icon-box icon-wallet-green">
+                  <div className="settings-menu-icon-box icon-pm-purple">
                     <CreditCard size={18} />
                   </div>
                   <div className="settings-menu-info">
-                    <span className="settings-menu-title">Atur Metode Pembayaran / Rekening</span>
-                    <span className="settings-menu-desc">Kelola daftar rekening bank, e-wallet, dan uang tunai</span>
+                    <span className="settings-menu-title">Metode Pembayaran / Rekening</span>
+                    <span className="settings-menu-desc">BSI, BCA, SeaBank, E-Wallet, Tunai, dan rekening utama</span>
                   </div>
                 </div>
 
                 <div className="settings-menu-right">
-                  <span className="badge badge-neutral">
-                    {paymentMethods.length} Rekening
-                  </span>
+                  <span className="badge badge-neutral">{paymentMethods.length} Rekening</span>
                   <ChevronRight size={16} className="text-muted" />
                 </div>
               </button>
 
-              {/* Row 4: Cadangan & Reset Data */}
+              {/* Row 4: Cadangan & Reset */}
               <button 
                 type="button" 
                 className="settings-menu-item-row"
                 onClick={() => setCurrentView('data')}
               >
                 <div className="settings-menu-left">
-                  <div className="settings-menu-icon-box icon-data-purple">
+                  <div className="settings-menu-icon-box icon-dt-slate">
                     <HardDrive size={18} />
                   </div>
                   <div className="settings-menu-info">
                     <span className="settings-menu-title">Cadangan & Reset Data</span>
-                    <span className="settings-menu-desc">Ekspor / impor file JSON dan opsi kosongkan data</span>
+                    <span className="settings-menu-desc">Ekspor/impor file JSON dan bersihkan data transaksi</span>
                   </div>
                 </div>
 
@@ -562,159 +477,119 @@ export default function SettingsModal({
           )}
 
           {/* =========================================================
-              2. SUB-MENU: ATUR KONEKSI (TELEGRAM DATABASE)
+              1. SUB-MENU: SUPABASE CLOUD
               ========================================================= */}
-          {currentView === 'connection' && (
-            <div className="settings-section tg-database-section">
-              <div className="tg-section-header">
-                <div className="tg-title-wrap">
-                  <Send size={18} className="text-info" />
-                  <h4 className="settings-section-title">Koneksi Database Telegram</h4>
+          {currentView === 'supabase' && (
+            <div className="settings-section">
+              <div className="status-indicator-box">
+                <div className="status-indicator-header">
+                  <div className="status-indicator-title">
+                    <Zap size={18} className="text-primary" />
+                    <span className="font-semibold text-sm">Status Supabase Realtime</span>
+                  </div>
+                  <span className={`badge ${isSupabaseConnected ? 'badge-success' : 'badge-neutral'}`}>
+                    {isSupabaseConnected ? '🟢 Terhubung (Multi-Device Active)' : '⚪ Belum Dikonfigurasi'}
+                  </span>
                 </div>
-
-                <span className={`badge ${isConnected ? 'badge-success' : 'badge-neutral'}`}>
-                  {isConnected ? (
-                    <>
-                      <CheckCircle2 size={12} />
-                      <span>Terhubung</span>
-                    </>
-                  ) : (
-                    <>
-                      <AlertCircle size={12} />
-                      <span>Belum Terhubung</span>
-                    </>
-                  )}
-                </span>
+                <p className="text-muted text-xs leading-relaxed mt-1">
+                  Supabase menyinkronkan seluruh transaksi dan tagihan ke semua perangkat (HP A, HP B, PC) secara real-time via WebSockets (&lt;50ms).
+                </p>
               </div>
 
-              <p className="text-muted text-xs">
-                Gunakan bot Telegram pribadimu sebagai database cloud gratis untuk menyimpan seluruh catatan keuangan secara otomatis dan aman.
-              </p>
+              <form onSubmit={handleSaveAndTestSupabase} className="settings-form mt-4">
+                <div className="form-group">
+                  <label className="form-label text-xs">Project URL Supabase</label>
+                  <input 
+                    type="text" 
+                    className="input-control font-mono text-xs" 
+                    placeholder="https://xyzproject.supabase.co" 
+                    value={supabaseUrl} 
+                    onChange={(e) => setSupabaseUrl(e.target.value)} 
+                    required 
+                  />
+                </div>
 
-              {/* Telegram Inputs Form */}
-              <div className="tg-config-card">
-                {/* Bot Token */}
-                <div className="input-group">
-                  <div className="tg-input-label-row">
-                    <label className="input-label">Telegram Bot Token (dari @BotFather)</label>
+                <div className="form-group">
+                  <label className="form-label text-xs">Anon Public Key</label>
+                  <div className="input-with-action">
+                    <input 
+                      type={showKey ? 'text' : 'password'} 
+                      className="input-control font-mono text-xs" 
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI..." 
+                      value={supabaseKey} 
+                      onChange={(e) => setSupabaseKey(e.target.value)} 
+                      required 
+                    />
                     <button 
                       type="button" 
-                      className="btn-toggle-mask" 
-                      onClick={() => setShowToken(!showToken)}
+                      className="btn-input-action" 
+                      onClick={() => setShowKey(!showKey)}
+                      title={showKey ? 'Sembunyikan Key' : 'Tampilkan Key'}
                     >
-                      {showToken ? <EyeOff size={13} /> : <Eye size={13} />}
-                      <span>{showToken ? 'Sembunyikan' : 'Tampilkan'}</span>
+                      {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
-                  <input 
-                    type={showToken ? "text" : "password"}
-                    className="input-control font-mono text-xs"
-                    placeholder="Contoh: 7123456789:AAH_XYZabcdef12345..."
-                    value={botToken}
-                    onChange={(e) => setBotToken(e.target.value)}
-                    onBlur={handleSaveConfig}
-                  />
                 </div>
 
-                {/* Chat ID */}
-                <div className="input-group">
-                  <label className="input-label">Telegram Chat ID / Channel ID</label>
-                  <input 
-                    type="text"
-                    className="input-control font-mono text-xs"
-                    placeholder="Contoh: 123456789 atau -100123456789"
-                    value={chatId}
-                    onChange={(e) => setChatId(e.target.value)}
-                    onBlur={handleSaveConfig}
-                  />
+                <div className="settings-action-row" style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary btn-sm flex-1" 
+                    disabled={testingConnection}
+                  >
+                    <RefreshCw size={13} className={testingConnection ? 'spin' : ''} />
+                    <span>{testingConnection ? 'Memeriksa...' : 'Simpan & Tes Koneksi'}</span>
+                  </button>
+                  
+                  {isSupabaseConnected && (
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleMigrateData}
+                      disabled={migratingData}
+                      title="Unggah data transaksi lokal ke Supabase"
+                    >
+                      <Upload size={13} className={migratingData ? 'spin' : ''} />
+                      <span>{migratingData ? 'Mengunggah...' : 'Migrasi Data Lokal'}</span>
+                    </button>
+                  )}
                 </div>
+              </form>
 
-                {/* Auto-Sync Toggle */}
-                <label className="tg-checkbox-row">
-                  <input 
-                    type="checkbox" 
-                    checked={autoSync}
-                    onChange={(e) => {
-                      setAutoSync(e.target.checked);
-                      saveTelegramConfig({ autoSync: e.target.checked });
-                    }}
-                  />
-                  <span className="text-xs">
-                    <strong>Otomatis Sinkron ke Telegram</strong> setiap kali menambah/mengubah data
-                  </span>
-                </label>
-
-                {/* Action Buttons: Test, Push, Pull */}
-                <div className="tg-actions-grid">
-                  <button 
-                    type="button"
-                    className="btn btn-secondary tg-action-btn"
-                    onClick={handleTestConnection}
-                    disabled={testingConnection || !botToken || !chatId}
-                  >
-                    <Bot size={15} />
-                    <span>{testingConnection ? 'Menguji...' : 'Tes Koneksi'}</span>
-                  </button>
-
-                  <button 
-                    type="button"
-                    className="btn btn-primary tg-action-btn"
-                    onClick={handlePushToTelegram}
-                    disabled={pushingToTg || !botToken || !chatId}
-                  >
-                    <Upload size={15} />
-                    <span>{pushingToTg ? 'Mengirim...' : 'Simpan ke Telegram'}</span>
-                  </button>
-
-                  <button 
-                    type="button"
-                    className="btn btn-secondary tg-action-btn"
-                    onClick={handlePullFromTelegram}
-                    disabled={pullingFromTg || !botToken || !chatId}
-                  >
-                    <Download size={15} />
-                    <span>{pullingFromTg ? 'Menarik...' : 'Tarik dari Telegram'}</span>
-                  </button>
-                </div>
-
-                {lastSynced && (
-                  <div className="tg-last-synced text-2xs text-muted">
-                    Terakhir tersinkronisasi: {new Date(lastSynced).toLocaleString('id-ID')}
-                  </div>
-                )}
-              </div>
-
-              {/* Collapsible Quick Guide */}
-              <div className="tg-guide-box">
+              {/* SQL Schema Helper Drawer */}
+              <div style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
                 <button 
                   type="button" 
                   className="tg-guide-toggle-btn"
-                  onClick={() => setShowGuide(!showGuide)}
+                  onClick={() => setShowSqlGuide(!showSqlGuide)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-color)' }}
                 >
-                  <HelpCircle size={14} className="text-primary" />
-                  <span>Panduan: Cara Membuat Bot & Mendapatkan Chat ID</span>
-                  <span className="text-xs">{showGuide ? '▲' : '▼'}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600 }}>
+                    <Copy size={14} className="text-primary" />
+                    <span>Skrip SQL Schema Supabase (Klik untuk Menyalin)</span>
+                  </div>
+                  <span className="text-xs">{showSqlGuide ? '▲' : '▼'}</span>
                 </button>
 
-                {showGuide && (
-                  <div className="tg-guide-steps">
-                    <ol className="text-xs text-muted leading-relaxed">
-                      <li>
-                        Buka aplikasi Telegram, cari <strong>@BotFather</strong> dan kirim <code>/newbot</code>.
-                      </li>
-                      <li>
-                        Beri nama bot dan username bot (misal: <em>my_finflow_db_bot</em>).
-                      </li>
-                      <li>
-                        Salin <strong>HTTP API Token</strong> dan tempel pada kolom <em>Bot Token</em> di atas.
-                      </li>
-                      <li>
-                        Buka bot yang baru dibuat, lalu tekan tombol <strong>Start</strong>.
-                      </li>
-                      <li>
-                        Selesai! Sekarang kamu bisa mencadangkan & memulihkan data langsung via Telegram.
-                      </li>
-                    </ol>
+                {showSqlGuide && (
+                  <div style={{ marginTop: '0.75rem', background: 'rgba(0,0,0,0.2)', padding: '0.75rem', borderRadius: '10px' }}>
+                    <p className="text-xs text-muted mb-2">
+                      Jalankan skrip ini sekali di <strong>Supabase Dashboard &gt; SQL Editor</strong> untuk membuat tabel & mengaktifkan Realtime:
+                    </p>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary btn-sm mb-2"
+                      onClick={() => {
+                        navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+                        showToast('Skrip SQL berhasil disalin ke clipboard!', 'info');
+                      }}
+                    >
+                      <Copy size={13} />
+                      <span>Salin Skrip SQL</span>
+                    </button>
+                    <pre style={{ maxHeight: '180px', overflowY: 'auto', fontSize: '0.7rem', padding: '0.5rem', background: 'rgba(0,0,0,0.4)', borderRadius: '6px', color: '#93c5fd' }}>
+                      {SUPABASE_SQL_SCHEMA}
+                    </pre>
                   </div>
                 )}
               </div>
@@ -722,201 +597,65 @@ export default function SettingsModal({
           )}
 
           {/* =========================================================
-              2. SUB-MENU: WHATSAPP BOT SERVER
+              2. SUB-MENU: WHATSAPP BOT HUB
               ========================================================= */}
           {currentView === 'whatsapp_bot' && (
-            <div className="wa-container-clean">
-              {/* 1. Primary Card: Server & Status */}
-              <div className="wa-card">
-                <div className="wa-card-header">
-                  <div className="wa-card-title">
-                    <MessageCircle size={16} className="text-inc" />
-                    <span>Status WhatsApp Bot</span>
+            <div className="settings-section">
+              <div className="status-indicator-box">
+                <div className="status-indicator-header">
+                  <div className="status-indicator-title">
+                    <MessageCircle size={18} className="text-success" />
+                    <span className="font-semibold text-sm">WhatsApp Bot Terintegrasi Cloud</span>
                   </div>
-                  <span className={`badge ${waServerStatus.status === 'connected' ? 'badge-success' : waServerStatus.status === 'qr' ? 'badge-warning' : 'badge-neutral'}`}>
-                    {waServerStatus.status === 'connected' ? '🟢 Bot Aktif & Siap' : waServerStatus.status === 'qr' ? '🟡 Scan QR WhatsApp' : '⚪ Server Offline'}
-                  </span>
+                  <span className="badge badge-success">⚡ Terhubung ke Supabase</span>
                 </div>
-
-                {/* Segmented Preset Selector */}
-                <div className="wa-mode-tabs">
-                  <button
-                    type="button"
-                    className={`wa-mode-btn ${serverUrlInput === LOCAL_WIFI_BOT_URL ? 'active' : ''}`}
-                    onClick={() => {
-                      setServerUrlInput(LOCAL_WIFI_BOT_URL);
-                      setBotServerUrl(LOCAL_WIFI_BOT_URL);
-                      refreshWaStatus(LOCAL_WIFI_BOT_URL);
-                      showToast('📶 Mode Wi-Fi Lokal PC (192.168.0.2)', 'success');
-                    }}
-                  >
-                    <span>📶 Wi-Fi Lokal</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`wa-mode-btn ${serverUrlInput === PERMANENT_BOT_URL ? 'active' : ''}`}
-                    onClick={() => {
-                      setServerUrlInput(PERMANENT_BOT_URL);
-                      setBotServerUrl(PERMANENT_BOT_URL);
-                      refreshWaStatus(PERMANENT_BOT_URL);
-                      showToast('🌐 Mode HTTPS Tunnel Online', 'info');
-                    }}
-                  >
-                    <span>🌐 HTTPS Tunnel</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`wa-mode-btn ${serverUrlInput === 'http://localhost:5051' ? 'active' : ''}`}
-                    onClick={() => {
-                      setServerUrlInput('http://localhost:5051');
-                      setBotServerUrl('http://localhost:5051');
-                      refreshWaStatus('http://localhost:5051');
-                      showToast('💻 Mode Localhost (5051)', 'info');
-                    }}
-                  >
-                    <span>💻 Localhost</span>
-                  </button>
-                </div>
-
-                {/* Server URL Input with Auto-Scan and Refresh */}
-                <div className="wa-input-actions-bar">
-                  <input 
-                    type="text"
-                    className="input-control font-mono text-xs"
-                    placeholder="http://192.168.0.2:5051 atau https://finflow-dewey-bot.loca.lt"
-                    value={serverUrlInput}
-                    onChange={(e) => setServerUrlInput(e.target.value)}
-                    onBlur={() => {
-                      setBotServerUrl(serverUrlInput);
-                      refreshWaStatus(serverUrlInput);
-                    }}
-                  />
-                  <button 
-                    type="button" 
-                    className="wa-btn-scan"
-                    onClick={handleScanLocalNetwork}
-                    disabled={isScanningNetwork}
-                    title="Otomatis cari server di subnet 192.168.0.0 - 255"
-                  >
-                    <RefreshCw size={12} className={isScanningNetwork ? 'spin' : ''} />
-                    <span>{isScanningNetwork ? 'Scan...' : 'Auto Scan'}</span>
-                  </button>
-                  <button 
-                    type="button" 
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => {
-                      setBotServerUrl(serverUrlInput);
-                      refreshWaStatus(serverUrlInput);
-                      showToast('Status server diperbarui', 'info');
-                    }}
-                    title="Periksa koneksi server"
-                  >
-                    <RefreshCw size={12} />
-                  </button>
-                </div>
-
-                {/* Live Scan Progress Info */}
-                {isScanningNetwork && (
-                  <div className="wa-scan-progress-strip">
-                    <RefreshCw size={12} className="spin" />
-                    <span>{scanProgressText || 'Memindai jaringan lokal 192.168.0.0 - 255...'}</span>
-                  </div>
-                )}
-
-                {/* HTTPS Mixed Content Warning Notice */}
-                {typeof window !== 'undefined' && window.location.protocol === 'https:' && serverUrlInput.startsWith('http://') && (
-                  <div className="wa-https-warning-banner">
-                    <AlertCircle size={14} className="text-warning flex-shrink-0" />
-                    <span>
-                      <strong>Info Keamanan Browser:</strong> Web ini dibuka via HTTPS (Vercel/Cloud). Browser memblokir HTTP lokal (Mixed Content). Gunakan tombol <strong>🌐 HTTPS Tunnel</strong> atau buka web via Wi-Fi: <code>http://192.168.0.2:5173</code>
-                    </span>
-                  </div>
-                )}
+                <p className="text-muted text-xs leading-relaxed mt-1">
+                  Pesan transaksi yang dikirim ke WhatsApp langsung disimpan oleh bot ke <strong>Supabase Cloud</strong> dan otomatis muncul di seluruh HP secara instan!
+                </p>
               </div>
 
-              {/* QR Code Scan Live Card */}
-              {(waServerStatus.status === 'qr' || waServerStatus.hasQR) && (
-                <div className="wa-card" style={{ textAlign: 'center', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: '#f59e0b', fontWeight: 700, fontSize: '0.9rem' }}>
-                    <Sparkles size={16} />
-                    <span>Scan QR WhatsApp Tersedia</span>
-                  </div>
-                  <p className="text-muted text-xs" style={{ marginTop: '0.35rem' }}>
-                    Buka WhatsApp di HP &gt; Perangkat Tertaut &gt; Tautkan Perangkat lalu scan:
-                  </p>
-
-                  {waServerStatus.qrDataUrl ? (
-                    <div style={{ margin: '0.75rem auto', padding: '0.75rem', background: '#fff', borderRadius: '12px', display: 'inline-block', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
-                      <img src={waServerStatus.qrDataUrl} alt="QR Code WhatsApp" style={{ width: '180px', height: '180px', display: 'block', imageRendering: 'pixelated' }} />
-                    </div>
-                  ) : null}
-
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
-                    <a 
-                      href={`${serverUrlInput || 'http://localhost:5051'}/qr`} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="btn btn-primary btn-sm"
-                      style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-                    >
-                      <ExternalLink size={12} />
-                      <span>Buka Scanner di Tab Baru</span>
-                    </a>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary btn-sm"
-                      style={{ fontSize: '0.75rem' }}
-                      onClick={() => refreshWaStatus()}
-                    >
-                      <RefreshCw size={12} />
-                      <span>Refresh QR</span>
-                    </button>
-                  </div>
+              {/* Command Runner Box */}
+              <div className="wa-card mt-3">
+                <div className="wa-card-title text-xs font-semibold mb-2">
+                  <Terminal size={14} className="text-primary" />
+                  <span>Jalankan Bot di Komputer (Terminal / CMD):</span>
                 </div>
-              )}
-
-              {/* 2. Terminal Command Card */}
-              <div className="wa-card">
-                <div className="wa-cmd-label">
-                  <Terminal size={14} className="text-muted" />
-                  <span>Jalankan bot server di komputer (Terminal / CMD):</span>
-                </div>
-                <div className="wa-cmd-clean">
-                  <code>npm run bot</code>
+                <div className="wa-cmd-box" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0,0,0,0.3)', padding: '0.5rem 0.75rem', borderRadius: '8px' }}>
+                  <code className="text-xs font-mono text-success">npm run bot</code>
                   <button 
                     type="button" 
-                    className="btn-copy-cmd" 
+                    className="btn btn-secondary btn-xs"
                     onClick={() => {
                       navigator.clipboard.writeText('npm run bot');
-                      showToast('Perintah "npm run bot" disalin ke clipboard!', 'info');
+                      showToast('Perintah "npm run bot" disalin!', 'info');
                     }}
-                    title="Salin Perintah"
                   >
                     <Copy size={12} />
                     <span>Salin</span>
                   </button>
                 </div>
+                <p className="text-xs text-muted mt-2">
+                  Atau buka dashboard scan QR di browser komputer: <code>http://localhost:5051/qr</code>
+                </p>
               </div>
 
-              {/* 3. Simulator Quick Test Card */}
-              <div className="wa-card">
-                <div className="wa-card-title">
-                  <Zap size={14} className="text-warn" />
-                  <span>Simulator Chat WhatsApp (Langsung Masuk ke FinFlow):</span>
+              {/* Simulator Quick Test */}
+              <div className="wa-card mt-3">
+                <div className="wa-card-title text-xs font-semibold mb-2" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Zap size={14} className="text-warning" />
+                  <span>Simulator Chat WhatsApp (Uji Coba Langsung):</span>
                 </div>
-                <form onSubmit={handleTestSendChat} className="wa-simulator-form">
+                <form onSubmit={handleTestSendChat}>
                   <input 
                     type="text"
-                    className="input-control font-mono text-xs"
+                    className="input-control font-mono text-xs mb-2"
                     value={testChatText}
                     onChange={(e) => setTestChatText(e.target.value)}
-                    placeholder="naspad 13000 / bensin 20.000 / cukur 25k"
+                    placeholder="naspad 13000 sea / bensin 30k bsi / kopi 18k"
                   />
                   <button 
                     type="submit" 
-                    className="btn btn-primary btn-sm wa-sim-btn"
+                    className="btn btn-primary btn-sm w-full"
                     disabled={isSendingTestChat || !testChatText.trim()}
                   >
                     {isSendingTestChat ? 'Memproses...' : 'Kirim & Catat ke FinFlow'}
@@ -924,34 +663,26 @@ export default function SettingsModal({
                 </form>
               </div>
 
-              {/* 4. Collapsible Formatting Guide (Clean Drawer) */}
-              <div className="wa-guide-accordion">
+              {/* Formatting Guide */}
+              <div className="mt-3">
                 <button 
                   type="button" 
-                  className="wa-guide-header-btn"
+                  className="tg-guide-toggle-btn"
                   onClick={() => setShowWaGuide(!showWaGuide)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-color)' }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 600 }}>
                     <HelpCircle size={14} className="text-primary" />
                     <span>Panduan Format Chat WhatsApp</span>
                   </div>
-                  <span className="text-xs text-muted">{showWaGuide ? '▲ Tutup' : '▼ Buka Contoh'}</span>
+                  <span className="text-xs">{showWaGuide ? '▲' : '▼'}</span>
                 </button>
 
                 {showWaGuide && (
-                  <div className="wa-guide-content">
-                    <div className="wa-example-item">
-                      <span className="wa-ex-badge">Format Khusus Rekening (Nama, Nominal, Rekening)</span>
-                      <code>naspad 13000 sea / bensin 30k bsi / jajan 25.000 bca</code>
-                    </div>
-                    <div className="wa-example-item">
-                      <span className="wa-ex-badge">Otomatis Rekening Utama (Tanpa Rekening)</span>
-                      <code>lauk 20k / kopi 18rb / cukur 25k</code>
-                    </div>
-                    <div className="wa-example-item">
-                      <span className="wa-ex-badge">Pemisah Multi-Item</span>
-                      <code>Garis miring ( / ), koma ( , ), atau baris baru</code>
-                    </div>
+                  <div style={{ padding: '0.75rem', background: 'rgba(0,0,0,0.2)', borderRadius: '10px', fontSize: '0.75rem', lineHeight: '1.6' }}>
+                    <p><strong>1. Rekening Tertentu:</strong> <code>naspad 13000 sea / bensin 30k bsi / jajan 25rb bca</code></p>
+                    <p><strong>2. Otomatis Rekening Utama:</strong> <code>lauk 20k / kopi 18rb / cukur 25k</code></p>
+                    <p><strong>3. Pemasukan:</strong> <code>gaji 5jt / freelance 1.5jt sea</code></p>
                   </div>
                 )}
               </div>
@@ -959,96 +690,78 @@ export default function SettingsModal({
           )}
 
           {/* =========================================================
-              3. SUB-MENU: ATUR METODE PEMBAYARAN / REKENING
+              3. SUB-MENU: PAYMENT METHODS
               ========================================================= */}
           {currentView === 'payment_methods' && (
-            <div className="settings-methods-tab-flow">
-              {/* Header & Add Button */}
-              <div className="methods-header-strip">
-                <span className="text-muted text-xs font-bold uppercase">
-                  TOTAL {paymentMethods.length} REKENING
-                </span>
+            <div className="settings-section">
+              <div className="settings-section-header-row mb-3">
+                <div>
+                  <h4 className="settings-section-title text-sm font-semibold">Daftar Rekening & Dompet</h4>
+                  <p className="text-muted text-xs">Pilih salah satu sebagai Rekening Utama default untuk input chat.</p>
+                </div>
                 {!isAddingMethod && (
                   <button 
                     type="button" 
-                    className="btn btn-sm btn-primary"
+                    className="btn btn-primary btn-xs"
                     onClick={handleStartAddMethod}
                   >
                     <Plus size={14} />
-                    <span>Tambah Rekening</span>
+                    <span>Tambah</span>
                   </button>
                 )}
               </div>
 
-              {/* Add / Edit Form */}
-              {isAddingMethod && (
-                <form onSubmit={handleSavePaymentMethod} className="method-edit-card">
-                  <div className="method-edit-title">
-                    <span className="text-xs font-bold">
-                      {editingMethod ? 'Edit Rekening / Metode' : 'Tambah Rekening / Metode Baru'}
-                    </span>
-                    <button 
-                      type="button" 
-                      className="btn-icon-subtle" 
-                      onClick={() => setIsAddingMethod(false)}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-
-                  <div className="input-group">
-                    <label className="input-label">Nama Rekening / E-Wallet / Dompet</label>
+              {isAddingMethod ? (
+                <form onSubmit={handleSavePaymentMethod} className="card-form-subtle mb-4">
+                  <div className="form-group mb-2">
+                    <label className="form-label text-xs">Nama Rekening / Dompet</label>
                     <input 
-                      type="text"
-                      className="input-control"
-                      placeholder="Contoh: SeaBank, BCA, Jenius, GoPay, Dompet Saku"
+                      type="text" 
+                      className="input-control text-xs" 
+                      placeholder="Misal: BSI, BCA, SeaBank, GoPay..."
                       value={methodName}
                       onChange={(e) => setMethodName(e.target.value)}
-                      autoFocus
                       required
                     />
                   </div>
-
-                  <div className="form-row-2">
-                    <div className="input-group">
-                      <label className="input-label">Jenis / Tipe</label>
+                  <div className="grid-2-col gap-2 mb-2">
+                    <div className="form-group">
+                      <label className="form-label text-xs">Tipe</label>
                       <select 
-                        className="input-control"
+                        className="select-control text-xs"
                         value={methodType}
                         onChange={(e) => setMethodType(e.target.value)}
                       >
-                        <option value="bank">Rekening Bank</option>
-                        <option value="ewallet">E-Wallet / Dompet Digital</option>
-                        <option value="cash">Uang Tunai (Cash)</option>
+                        <option value="bank">Bank</option>
+                        <option value="ewallet">E-Wallet</option>
+                        <option value="cash">Tunai (Cash)</option>
                       </select>
                     </div>
-
-                    <div className="input-group">
-                      <label className="input-label">No. Rek / Catatan (Opsional)</label>
+                    <div className="form-group">
+                      <label className="form-label text-xs">Nomor Rek / Akun (Opsional)</label>
                       <input 
-                        type="text"
-                        className="input-control"
-                        placeholder="Contoh: 1234-5678"
+                        type="text" 
+                        className="input-control text-xs" 
+                        placeholder="1234-5678"
                         value={methodNumber}
                         onChange={(e) => setMethodNumber(e.target.value)}
                       />
                     </div>
                   </div>
-
-                  {/* Set as Primary Toggle */}
-                  <label className="method-primary-toggle-row">
-                    <input 
-                      type="checkbox"
-                      checked={methodIsPrimary}
-                      onChange={(e) => setMethodIsPrimary(e.target.checked)}
-                    />
-                    <span className="text-xs">
-                      <Star size={13} className="text-warn inline" style={{ verticalAlign: 'middle', marginRight: '4px' }} fill={methodIsPrimary ? 'currentColor' : 'none'} />
-                      <strong>Jadikan Rekening Utama</strong> (Prioritas pemasukan & simpanan)
-                    </span>
-                  </label>
-
-                  <div className="method-form-actions">
+                  <div className="form-group mb-3">
+                    <label className="checkbox-control text-xs" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={methodIsPrimary}
+                        onChange={(e) => setMethodIsPrimary(e.target.checked)}
+                      />
+                      <span>Jadikan sebagai Rekening Utama</span>
+                    </label>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button type="submit" className="btn btn-primary btn-sm flex-1">
+                      {editingMethod ? 'Simpan Perubahan' : 'Tambahkan'}
+                    </button>
                     <button 
                       type="button" 
                       className="btn btn-secondary btn-sm"
@@ -1056,156 +769,131 @@ export default function SettingsModal({
                     >
                       Batal
                     </button>
-                    <button type="submit" className="btn btn-primary btn-sm">
-                      <Check size={14} />
-                      <span>{editingMethod ? 'Perbarui Rekening' : 'Simpan Rekening'}</span>
-                    </button>
                   </div>
                 </form>
-              )}
+              ) : null}
 
-              {/* Methods List */}
-              <div className="methods-items-list">
-                {paymentMethods.map(item => {
-                  const isCash = item.icon === 'Banknote' || item.name.toLowerCase().includes('tunai') || item.name.toLowerCase().includes('cash');
-                  const isEwallet = item.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => item.name.toLowerCase().includes(e));
-
-                  return (
-                    <div key={item.id} className={`method-item-row ${item.isPrimary ? 'is-primary-row' : ''}`}>
-                      <div className="method-item-left">
-                        <div className="method-item-icon" style={{ color: item.color || '#0060AF' }}>
-                          {isCash ? <Banknote size={16} /> : isEwallet ? <Smartphone size={16} /> : <CreditCard size={16} />}
-                        </div>
-                        <div className="method-item-info">
-                          <div className="method-item-name-row">
-                            <span className="method-item-name">{item.name}</span>
-                            {item.isPrimary && (
-                              <span className="badge-primary-pill" title="Rekening Utama">
-                                <Star size={10} fill="currentColor" />
-                                <span>Utama</span>
-                              </span>
-                            )}
-                          </div>
-                          {item.number && <span className="method-item-number">{item.number}</span>}
-                        </div>
+              <div className="payment-methods-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {paymentMethods.map(item => (
+                  <div 
+                    key={item.id} 
+                    className="pm-item-card"
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '0.65rem 0.85rem', borderRadius: '10px',
+                      background: 'var(--card-bg)', border: '1px solid var(--border-color)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {item.icon === 'Banknote' ? <Banknote size={16} /> : item.icon === 'Smartphone' ? <Smartphone size={16} /> : <CreditCard size={16} />}
                       </div>
-
-                      <div className="method-item-actions">
-                        {!item.isPrimary && (
-                          <button 
-                            type="button" 
-                            className="btn-set-primary-subtle" 
-                            onClick={() => handleSetPrimary(item.id)}
-                            title="Jadikan sebagai Rekening Utama"
-                          >
-                            <Star size={12} />
-                            <span>Jadikan Utama</span>
-                          </button>
-                        )}
-                        <button 
-                          type="button"
-                          className="btn-icon-subtle"
-                          onClick={() => handleStartEditMethod(item)}
-                          title="Edit"
-                        >
-                          <Edit2 size={13} />
-                        </button>
-                        <button 
-                          type="button"
-                          className="btn-icon-subtle btn-delete"
-                          onClick={() => handleDeletePaymentMethod(item.id)}
-                          title="Hapus"
-                          disabled={paymentMethods.length <= 1}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{item.name}</span>
+                          {item.isPrimary && (
+                            <span className="badge badge-success" style={{ fontSize: '0.65rem', padding: '0.1rem 0.4rem' }}>Utama</span>
+                          )}
+                        </div>
+                        {item.number && <span className="text-xs text-muted">{item.number}</span>}
                       </div>
                     </div>
-                  );
-                })}
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      {!item.isPrimary && (
+                        <button 
+                          type="button" 
+                          className="btn btn-secondary btn-xs"
+                          onClick={() => {
+                            setPrimaryPaymentMethod(item.id);
+                            setPaymentMethods(getCustomPaymentMethods());
+                            showToast(`"${item.name}" diatur sebagai Rekening Utama`, 'info');
+                          }}
+                        >
+                          Pilih Utama
+                        </button>
+                      )}
+                      <button 
+                        type="button" 
+                        className="btn-icon-subtle"
+                        onClick={() => handleStartEditMethod(item)}
+                        title="Edit"
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      <button 
+                        type="button" 
+                        className="btn-icon-subtle text-danger"
+                        onClick={() => handleDeletePaymentMethod(item.id)}
+                        title="Hapus"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
           {/* =========================================================
-              4. SUB-MENU: CADANGAN & RESET DATA
+              4. SUB-MENU: DATA BACKUP & RESET
               ========================================================= */}
           {currentView === 'data' && (
-            <div className="settings-data-tab-flow">
-              {/* Backup JSON */}
-              <div className="settings-section">
-                <h4 className="settings-section-title">
-                  <HardDrive size={16} className="text-primary" />
-                  Backup File JSON (Lokal)
-                </h4>
-
-                <div className="backup-actions-grid">
+            <div className="settings-section">
+              <div className="data-action-card mb-3" style={{ padding: '0.85rem', borderRadius: '10px', background: 'var(--card-bg)', border: '1px solid var(--border-color)' }}>
+                <h4 className="text-xs font-semibold mb-1">Cadangan File JSON</h4>
+                <p className="text-muted text-xs mb-3">Simpan atau pulihkan seluruh data catatan keuangan ke file JSON.</p>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button 
-                    className="btn btn-secondary backup-action-btn"
+                    type="button" 
+                    className="btn btn-primary btn-sm flex-1"
                     onClick={handleExport}
                     disabled={loading}
                   >
-                    <Download size={16} className="text-primary" />
-                    <div className="btn-col">
-                      <strong>Ekspor File JSON</strong>
-                      <span className="text-muted text-2xs">Unduh database ke file .json</span>
-                    </div>
+                    <Download size={13} />
+                    <span>Ekspor JSON</span>
                   </button>
-
                   <button 
-                    className="btn btn-secondary backup-action-btn"
+                    type="button" 
+                    className="btn btn-secondary btn-sm flex-1"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={loading}
                   >
-                    <Upload size={16} className="text-info" />
-                    <div className="btn-col">
-                      <strong>Impor File JSON</strong>
-                      <span className="text-muted text-2xs">Pulihkan dari file .json</span>
-                    </div>
+                    <Upload size={13} />
+                    <span>Impor JSON</span>
                   </button>
                   <input 
                     type="file" 
                     ref={fileInputRef} 
                     style={{ display: 'none' }} 
                     accept=".json" 
-                    onChange={handleImportFile}
+                    onChange={handleImportFile} 
                   />
                 </div>
               </div>
 
-              {/* Reset Zone */}
-              <div className="settings-section section-danger-zone">
-                <h4 className="settings-section-title text-danger">
-                  <AlertTriangle size={16} />
-                  Zona Reset Data
-                </h4>
-                <div className="reset-action-row">
-                  <div className="reset-info">
-                    <strong className="text-sm">Muat Ulang Data Contoh</strong>
-                    <p className="text-muted text-xs">Ganti data saat ini dengan template contoh bawaan.</p>
-                  </div>
+              <div className="data-action-card" style={{ padding: '0.85rem', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                <h4 className="text-xs font-semibold text-danger mb-1">Pembersihan Data</h4>
+                <p className="text-muted text-xs mb-3">Hati-hati: Tindakan ini tidak dapat dibatalkan.</p>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button 
-                    className="btn btn-secondary btn-sm btn-danger-outline"
+                    type="button" 
+                    className="btn btn-secondary btn-sm flex-1"
                     onClick={handleResetSample}
                     disabled={loading}
                   >
                     <RefreshCw size={13} />
-                    <span>Reset Contoh</span>
+                    <span>Reset Data Contoh</span>
                   </button>
-                </div>
-
-                <div className="reset-action-row" style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed var(--border-hairline)' }}>
-                  <div className="reset-info">
-                    <strong className="text-sm text-danger">Kosongkan Seluruh Data</strong>
-                    <p className="text-muted text-xs">Hapus semua transaksi dan tagihan rutin bersih (0 data).</p>
-                  </div>
                   <button 
-                    className="btn btn-secondary btn-sm btn-danger-outline"
+                    type="button" 
+                    className="btn btn-danger btn-sm flex-1"
                     onClick={handleClearAllData}
                     disabled={loading}
                   >
-                    <AlertTriangle size={13} />
-                    <span>Kosongkan Semua</span>
+                    <Trash2 size={13} />
+                    <span>Kosongkan Seluruh Data</span>
                   </button>
                 </div>
               </div>

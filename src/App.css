@@ -93,6 +93,12 @@
   border: 1px solid rgba(56, 189, 248, 0.35);
 }
 
+.zen-cloud-sync-badge.offline {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
 .cloud-pulse {
   animation: cloudPulse 2.5s infinite;
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   ChevronLeft, ChevronRight, Moon, Sun, 
-  Settings, Plus, Send, Swords, CalendarClock, Cloud
+  Settings, Plus, Zap, Swords
 } from 'lucide-react';
 import { formatMonthYear } from '../utils/formatters';
 
@@ -10,7 +10,7 @@ export default function Header({
   setSelectedMonthYear,
   theme,
   toggleTheme,
-  isCloudSyncing = false,
+  isSupabaseConnected = false,
   onOpenSettings,
   onOpenNewTransaction,
   onOpenManageRecurring
@@ -44,17 +44,17 @@ export default function Header({
   return (
     <header className="zen-header">
       <div className="zen-top-bar">
-        {/* Brand with Live Real-time Cloud Sync Badge */}
+        {/* Brand with Supabase Realtime Badge */}
         <div className="zen-brand">
           <span className="zen-brand-title">FinFlow</span>
           <div 
-            className={`zen-cloud-sync-badge ${isCloudSyncing ? 'syncing' : 'active'}`}
-            title={isCloudSyncing ? "Menyinkronkan data cloud..." : "Cloud Sync Real-time Aktif (Multi-Device)"}
+            className={`zen-cloud-sync-badge ${isSupabaseConnected ? 'active' : 'offline'}`}
+            title={isSupabaseConnected ? "⚡ Supabase Realtime Aktif (Multi-Device Otomatis)" : "Supabase Belum Diatur (Klik untuk Menghubungkan)"}
             onClick={onOpenSettings}
             style={{ cursor: 'pointer' }}
           >
-            <Cloud size={11} className={isCloudSyncing ? 'cloud-spin' : 'cloud-pulse'} />
-            <span className="zen-cloud-text">{isCloudSyncing ? 'Sync' : 'Cloud'}</span>
+            <Zap size={11} className={isSupabaseConnected ? 'cloud-pulse' : ''} />
+            <span className="zen-cloud-text">{isSupabaseConnected ? 'Realtime' : 'Setup Cloud'}</span>
           </div>
         </div>
 
@@ -97,12 +97,16 @@ export default function Header({
           <button className="zen-icon-btn" onClick={toggleTheme} title="Ganti Tema" aria-label="Ganti Tema">
             {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
           </button>
-          <button className="zen-icon-btn" onClick={onOpenSettings} title="Pengaturan & Koneksi Database" aria-label="Pengaturan">
+          <button className="zen-icon-btn" onClick={onOpenSettings} title="Pengaturan & Database Cloud" aria-label="Pengaturan">
             <Settings size={17} />
           </button>
-          <button className="zen-primary-btn" onClick={onOpenNewTransaction} title="Catat Pengeluaran / Pemasukan" aria-label="Catat Transaksi">
-            <Plus size={16} />
-            <span className="header-btn-text">Catat</span>
+          <button 
+            className="zen-btn-add" 
+            onClick={onOpenNewTransaction} 
+            title="Catat Transaksi Baru (Pemasukan / Pengeluaran)"
+          >
+            <Plus size={15} />
+            <span>Catat</span>
           </button>
         </div>
       </div>
