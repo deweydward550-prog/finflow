@@ -374,19 +374,26 @@ export default function MonthlyQuests({
                           <span className={`quest-due-tag ${isOverdue ? 'due-overdue' : ''}`}>
                             Tgl {item.dueDay}
                           </span>
+                          {(item.targetPaymentMethod || item.isSavings) && (
+                            <span className="badge badge-success text-2xs py-0 px-1 font-medium">
+                              ➔ {item.targetPaymentMethod || 'BCA'}
+                            </span>
+                          )}
                           <span className="quest-item-amount">{formatRupiah(item.amount)}</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Tombol Bayar Tagihan */}
+                    {/* Tombol Bayar / Tabung Tagihan */}
                     <button 
                       className="quest-complete-btn"
                       onClick={(e) => handleCompleteRecurringQuest(e, item)}
-                      title="Bayar tagihan ini (otomatis tercatat ke pengeluaran)"
+                      title={(item.targetPaymentMethod || item.isSavings) 
+                        ? `Pindahkan tabungan dari ${item.paymentMethod || 'BSI'} ke ${item.targetPaymentMethod || 'BCA'}`
+                        : "Bayar tagihan ini (otomatis tercatat ke pengeluaran)"}
                     >
                       <Check size={13} strokeWidth={3} />
-                      <span>Bayar</span>
+                      <span>{(item.targetPaymentMethod || item.isSavings) ? 'Tabung' : 'Bayar'}</span>
                     </button>
                   </div>
                 );

@@ -130,25 +130,47 @@ export async function fetchTransactionsFromSupabase() {
   }
 
   // Normalize field names (snake_case to camelCase)
-  return (data || []).map(t => ({
-    id: t.id,
-    title: t.title,
-    amount: Number(t.amount),
-    type: t.type,
-    category: t.category,
-    date: t.date,
-    time: t.time || '',
-    paymentMethod: t.payment_method || 'BSI',
-    notes: t.notes || '',
-    recurringId: t.recurring_id ? (isNaN(t.recurring_id) ? t.recurring_id : Number(t.recurring_id)) : null,
-    source: t.source || 'manual',
-    createdAt: t.created_at || new Date().toISOString()
-  }));
+  return (data || []).map(t => {
+    let targetPaymentMethod = null;
+    let cleanNotes = (t.notes || '').trim();
+    const toMatch = cleanNotes.match(/\[to:([^\]]+)\]/i);
+    if (toMatch) {
+      targetPaymentMethod = toMatch[1].trim();
+      cleanNotes = cleanNotes.replace(/\[to:[^\]]*\]/gi, '').trim();
+    }
+    // Auto-infer for Tabungan Lily
+    if (!targetPaymentMethod && (t.title?.toLowerCase().includes('tabungan lily') || cleanNotes.toLowerCase().includes('tabungan lily'))) {
+      targetPaymentMethod = 'BCA';
+    }
+
+    return {
+      id: t.id,
+      title: t.title,
+      amount: Number(t.amount),
+      type: targetPaymentMethod ? 'transfer' : t.type,
+      category: t.category,
+      date: t.date,
+      time: t.time || '',
+      paymentMethod: t.payment_method || 'BSI',
+      targetPaymentMethod: targetPaymentMethod || undefined,
+      notes: cleanNotes,
+      recurringId: t.recurring_id ? (isNaN(t.recurring_id) ? t.recurring_id : Number(t.recurring_id)) : null,
+      source: t.source || 'manual',
+      createdAt: t.created_at || new Date().toISOString()
+    };
+  });
 }
 
 export async function insertTransactionToSupabase(tx) {
   const client = getSupabase();
   if (!client) return null;
+
+  let notes = tx.notes || '';
+  if (tx.targetPaymentMethod) {
+    if (!notes.includes(`[to:${tx.targetPaymentMethod}]`)) {
+      notes = notes ? `${notes} [to:${tx.targetPaymentMethod}]` : `[to:${tx.targetPaymentMethod}]`;
+    }
+  }
 
   const payload = {
     id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -159,7 +181,7 @@ export async function insertTransactionToSupabase(tx) {
     date: tx.date,
     time: tx.time || '',
     payment_method: tx.paymentMethod || 'BSI',
-    notes: tx.notes || '',
+    notes: notes,
     recurring_id: tx.recurringId ? String(tx.recurringId) : null,
     source: tx.source || 'manual',
     created_at: tx.createdAt || new Date().toISOString()
@@ -174,6 +196,13 @@ export async function updateTransactionInSupabase(id, tx) {
   const client = getSupabase();
   if (!client) return null;
 
+  let notes = tx.notes || '';
+  if (tx.targetPaymentMethod) {
+    if (!notes.includes(`[to:${tx.targetPaymentMethod}]`)) {
+      notes = notes ? `${notes} [to:${tx.targetPaymentMethod}]` : `[to:${tx.targetPaymentMethod}]`;
+    }
+  }
+
   const payload = {
     title: tx.title,
     amount: tx.amount,
@@ -182,7 +211,7 @@ export async function updateTransactionInSupabase(id, tx) {
     date: tx.date,
     time: tx.time,
     payment_method: tx.paymentMethod,
-    notes: tx.notes,
+    notes: notes,
     recurring_id: tx.recurringId ? String(tx.recurringId) : null
   };
 
@@ -199,13 +228,15 @@ export async function deleteTransactionFromSupabase(id) {
 }
 
 // =========================================================================
-// RECURRING EXPENSES METADATA HELPER (Icon & Color persistence)
+// RECURRING EXPENSES METADATA HELPER (Icon, Color, & Target Account)
 // =========================================================================
-export function packRecurringNotes(notes = '', icon, color) {
-  let cleanNotes = (notes || '').replace(/\[meta:[^\]]*\]/gi, '').trim();
+export function packRecurringNotes(notes = '', icon, color, targetPaymentMethod, isSavings) {
+  let cleanNotes = (notes || '').replace(/\[meta:[^\]]*\]/gi, '').replace(/\[to:[^\]]*\]/gi, '').trim();
   const metaParts = [];
   if (icon) metaParts.push(`icon=${icon}`);
   if (color) metaParts.push(`color=${encodeURIComponent(color)}`);
+  if (targetPaymentMethod) metaParts.push(`to=${encodeURIComponent(targetPaymentMethod)}`);
+  if (isSavings) metaParts.push(`savings=1`);
   
   if (metaParts.length > 0) {
     const metaTag = `[meta:${metaParts.join(',')}]`;
@@ -218,6 +249,8 @@ export function unpackRecurringNotes(rawNotes = '', title = '', category = '') {
   let notes = (rawNotes || '').trim();
   let icon = null;
   let color = null;
+  let targetPaymentMethod = null;
+  let isSavings = false;
 
   const metaMatch = notes.match(/\[meta:([^\]]+)\]/i);
   if (metaMatch) {
@@ -227,14 +260,35 @@ export function unpackRecurringNotes(rawNotes = '', title = '', category = '') {
       const [k, v] = pair.split('=');
       if (k === 'icon' && v) icon = v.trim();
       if (k === 'color' && v) color = decodeURIComponent(v.trim());
+      if (k === 'to' && v) targetPaymentMethod = decodeURIComponent(v.trim());
+      if (k === 'savings' && (v === '1' || v === 'true')) isSavings = true;
     });
     notes = notes.replace(/\[meta:[^\]]*\]/gi, '').trim();
   }
 
+  const toMatch = notes.match(/\[to:([^\]]+)\]/i);
+  if (toMatch && !targetPaymentMethod) {
+    targetPaymentMethod = toMatch[1].trim();
+    isSavings = true;
+    notes = notes.replace(/\[to:[^\]]*\]/gi, '').trim();
+  }
+
+  // Smart fallback inference for savings & target accounts
+  const t = (title || '').toLowerCase();
+  const c = (category || '').toLowerCase();
+  if (!targetPaymentMethod) {
+    if (t.includes('lily') || (t.includes('tabungan') && !t.includes('bsi'))) {
+      targetPaymentMethod = 'BCA';
+      isSavings = true;
+    }
+  }
+
+  if (targetPaymentMethod) {
+    isSavings = true;
+  }
+
   // Smart fallback inference if icon / color missing
   if (!icon) {
-    const t = (title || '').toLowerCase();
-    const c = (category || '').toLowerCase();
     if (t.includes('bpjs') || t.includes('medis') || t.includes('dokter') || t.includes('obat') || c.includes('kesehatan')) {
       icon = 'HeartPulse';
     } else if (t.includes('wifi') || t.includes('internet') || t.includes('indihome') || t.includes('biznet') || t.includes('myrepublic') || t.includes('firstmedia')) {
@@ -253,7 +307,7 @@ export function unpackRecurringNotes(rawNotes = '', title = '', category = '') {
       icon = 'Dumbbell';
     } else if (t.includes('katering') || t.includes('makan') || t.includes('galon') || t.includes('beras') || c.includes('makanan')) {
       icon = 'Utensils';
-    } else if (t.includes('tabungan') || t.includes('cicilan') || t.includes('investasi') || t.includes('arisan') || t.includes('deposito') || t.includes('lily')) {
+    } else if (isSavings || t.includes('tabungan') || t.includes('cicilan') || t.includes('investasi') || t.includes('arisan') || t.includes('deposito') || t.includes('lily')) {
       icon = 'Wallet';
     } else {
       icon = 'Zap';
@@ -293,12 +347,12 @@ export function unpackRecurringNotes(rawNotes = '', title = '', category = '') {
         color = '#10B981';
         break;
       default:
-        color = '#3B82F6';
+        color = isSavings ? '#10B981' : '#3B82F6';
         break;
     }
   }
 
-  return { notes, icon, color };
+  return { notes, icon, color, targetPaymentMethod, isSavings };
 }
 
 // =========================================================================
@@ -319,13 +373,15 @@ export async function fetchRecurringFromSupabase() {
   }
 
   return (data || []).map(r => {
-    const { notes, icon, color } = unpackRecurringNotes(r.notes, r.title, r.category);
+    const { notes, icon, color, targetPaymentMethod, isSavings } = unpackRecurringNotes(r.notes, r.title, r.category);
     return {
       id: isNaN(r.id) ? r.id : Number(r.id),
       title: r.title,
       amount: Number(r.amount),
       category: r.category,
       paymentMethod: r.payment_method || 'BSI',
+      targetPaymentMethod: targetPaymentMethod || undefined,
+      isSavings: Boolean(isSavings || targetPaymentMethod),
       dueDay: Number(r.due_day),
       billingCycle: r.billing_cycle || 'monthly',
       notes: notes,
@@ -341,7 +397,7 @@ export async function insertRecurringToSupabase(rec) {
   const client = getSupabase();
   if (!client) return null;
 
-  const packedNotes = packRecurringNotes(rec.notes, rec.icon, rec.color);
+  const packedNotes = packRecurringNotes(rec.notes, rec.icon, rec.color, rec.targetPaymentMethod, rec.isSavings);
 
   const payload = {
     id: rec.id ? String(rec.id) : `rec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -365,7 +421,7 @@ export async function updateRecurringInSupabase(id, rec) {
   const client = getSupabase();
   if (!client) return null;
 
-  const packedNotes = packRecurringNotes(rec.notes, rec.icon, rec.color);
+  const packedNotes = packRecurringNotes(rec.notes, rec.icon, rec.color, rec.targetPaymentMethod, rec.isSavings);
 
   const payload = {
     title: rec.title,

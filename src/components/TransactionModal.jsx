@@ -15,11 +15,12 @@ export default function TransactionModal({
 }) {
   if (!isOpen) return null;
 
-  const [type, setType] = useState('expense'); // 'expense' | 'income'
+  const [type, setType] = useState('expense'); // 'expense' | 'income' | 'transfer'
   const [amount, setAmount] = useState('');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState(() => getPrimaryPaymentMethod()?.name || 'BCA');
+  const [paymentMethod, setPaymentMethod] = useState(() => getPrimaryPaymentMethod()?.name || 'BSI');
+  const [targetAccount, setTargetAccount] = useState('BCA');
   const [paymentMethodsList, setPaymentMethodsList] = useState(getCustomPaymentMethods());
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -44,19 +45,21 @@ export default function TransactionModal({
   useEffect(() => {
     const methods = getCustomPaymentMethods();
     setPaymentMethodsList(methods);
-    const primaryMethod = getPrimaryPaymentMethod()?.name || methods[0]?.name || 'BCA';
+    const primaryMethod = getPrimaryPaymentMethod()?.name || methods[0]?.name || 'BSI';
+    const defaultTarget = methods.find(m => m.name !== primaryMethod)?.name || 'BCA';
 
     if (initialData) {
-      setType(initialData.type || 'expense');
+      const txType = initialData.type || (initialData.targetPaymentMethod ? 'transfer' : 'expense');
+      setType(txType);
       setAmount(initialData.amount ? formatAmountInput(initialData.amount) : '');
       setTitle(initialData.title || '');
-      setCategory(initialData.category || '');
+      setCategory(initialData.category || (txType === 'transfer' ? 'Tabungan & Investasi' : 'Makanan & Minuman'));
       setPaymentMethod(initialData.paymentMethod || primaryMethod);
+      setTargetAccount(initialData.targetPaymentMethod || defaultTarget);
       setDate(initialData.date || '');
       setTime(initialData.time || '');
       setNotes(initialData.notes || '');
     } else {
-      // Default to today's date or matching current selected month
       const now = new Date();
       const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       let defaultDate = now.toISOString().split('T')[0];
@@ -70,6 +73,7 @@ export default function TransactionModal({
       setTitle('');
       setCategory('Makanan & Minuman');
       setPaymentMethod(primaryMethod);
+      setTargetAccount(defaultTarget);
       setDate(defaultDate);
       setTime(now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }));
       setNotes('');
@@ -78,13 +82,21 @@ export default function TransactionModal({
   }, [initialData, isOpen, selectedMonthYear]);
 
   // Filter categories by type
-  const availableCategories = DEFAULT_CATEGORIES.filter(c => c.type === type);
+  const availableCategories = DEFAULT_CATEGORIES.filter(c => type === 'transfer' ? (c.id === 'investasi' || c.id === 'pemasukan_lain' || c.id === 'tagihan' || c.id === 'lainnya') : c.type === type);
 
   // Set default category when type switches
   const handleTypeChange = (newType) => {
     setType(newType);
-    const firstCat = DEFAULT_CATEGORIES.find(c => c.type === newType);
-    if (firstCat) setCategory(firstCat.name);
+    if (newType === 'transfer') {
+      setCategory('Tabungan & Investasi');
+      if (targetAccount === paymentMethod) {
+        const other = paymentMethodsList.find(m => m.name !== paymentMethod)?.name || 'BCA';
+        setTargetAccount(other);
+      }
+    } else {
+      const firstCat = DEFAULT_CATEGORIES.find(c => c.type === newType);
+      if (firstCat) setCategory(firstCat.name);
+    }
   };
 
   const handleSubmit = (e) => {
@@ -98,12 +110,12 @@ export default function TransactionModal({
       setError('Masukkan judul transaksi');
       return;
     }
-    if (!category) {
-      setError('Pilih kategori transaksi');
-      return;
-    }
     if (!date) {
       setError('Pilih tanggal transaksi');
+      return;
+    }
+    if (type === 'transfer' && paymentMethod === targetAccount) {
+      setError('Rekening sumber dan tujuan transfer tidak boleh sama');
       return;
     }
 
@@ -112,8 +124,9 @@ export default function TransactionModal({
       title: title.trim(),
       amount: numAmount,
       type,
-      category,
+      category: category || (type === 'transfer' ? 'Tabungan & Investasi' : 'Pengeluaran Lainnya'),
       paymentMethod,
+      targetPaymentMethod: type === 'transfer' ? targetAccount : undefined,
       date,
       time: time || '12:00',
       notes: notes.trim(),
@@ -124,6 +137,7 @@ export default function TransactionModal({
   // Suggestion chips
   const expenseSuggestions = ['Makan Siang', 'Kopi & Snack', 'Bensin Motor/Mobil', 'Belanja Harian', 'Parkir', 'Makan Malam'];
   const incomeSuggestions = ['Gaji Bulanan', 'Freelance Project', 'Bonus / THR', 'Penjualan Online', 'Cashback'];
+  const transferSuggestions = ['Tabungan Lily', 'Pindah Saldo BCA', 'Top Up SeaBank', 'Tabungan Darurat', 'Investasi Reksadana'];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -134,7 +148,7 @@ export default function TransactionModal({
             <h3 className="modal-title">
               {initialData ? 'Edit Transaksi' : 'Catat Transaksi Baru'}
             </h3>
-            <span className="text-muted text-xs">Simpan otomatis ke database lokal gratis</span>
+            <span className="text-muted text-xs">Simpan otomatis ke database lokal dan cloud</span>
           </div>
           <button className="btn-icon-subtle" onClick={onClose}>
             <X size={18} />
@@ -150,7 +164,7 @@ export default function TransactionModal({
               className={`type-toggle-btn type-expense ${type === 'expense' ? 'active' : ''}`}
               onClick={() => handleTypeChange('expense')}
             >
-              <ArrowDownCircle size={16} />
+              <ArrowDownCircle size={15} />
               <span>Pengeluaran</span>
             </button>
             <button 
@@ -158,14 +172,24 @@ export default function TransactionModal({
               className={`type-toggle-btn type-income ${type === 'income' ? 'active' : ''}`}
               onClick={() => handleTypeChange('income')}
             >
-              <ArrowUpCircle size={16} />
+              <ArrowUpCircle size={15} />
               <span>Pemasukan</span>
+            </button>
+            <button 
+              type="button"
+              className={`type-toggle-btn type-transfer ${type === 'transfer' ? 'active' : ''}`}
+              onClick={() => handleTypeChange('transfer')}
+            >
+              <Sparkles size={15} />
+              <span>Tabungan / Transfer</span>
             </button>
           </div>
 
           {/* Amount Input */}
           <div className="amount-input-card">
-            <label className="amount-label">Nominal Transaksi (Rp)</label>
+            <label className="amount-label">
+              {type === 'transfer' ? 'Nominal Tabungan / Transfer (Rp)' : 'Nominal Transaksi (Rp)'}
+            </label>
             <div className="amount-input-wrapper">
               <span className="currency-prefix">Rp</span>
               <input 
@@ -185,14 +209,14 @@ export default function TransactionModal({
             <label className="input-label">Judul / Keperluan</label>
             <input 
               type="text"
-              placeholder="Contoh: Makan Siang Nasi Padang, Bensin..."
+              placeholder={type === 'transfer' ? 'Contoh: Tabungan Lily, Pindah Saldo ke BCA...' : 'Contoh: Makan Siang Nasi Padang, Bensin...'}
               className="input-control"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
             {/* Quick suggestions */}
             <div className="suggestions-list">
-              {(type === 'expense' ? expenseSuggestions : incomeSuggestions).map((sug) => (
+              {(type === 'expense' ? expenseSuggestions : type === 'income' ? incomeSuggestions : transferSuggestions).map((sug) => (
                 <button 
                   key={sug} 
                   type="button" 
@@ -205,25 +229,69 @@ export default function TransactionModal({
             </div>
           </div>
 
-          {/* Category Selector */}
+          {/* Account / Payment Methods */}
           <div className="input-group">
-            <label className="input-label">Pilih Kategori</label>
-            <div className="category-chips-grid">
-              {availableCategories.map(cat => (
-                <button 
-                  key={cat.id}
-                  type="button"
-                  className={`cat-chip-btn ${category === cat.name ? 'selected' : ''}`}
-                  onClick={() => setCategory(cat.name)}
-                >
-                  <span className="cat-chip-icon" style={{ color: cat.color }}>
-                    {getCategoryIcon(cat.icon, 14)}
-                  </span>
-                  <span className="cat-chip-text">{cat.name}</span>
-                </button>
-              ))}
+            <label className="input-label">
+              {type === 'transfer' ? '1. Dari Rekening (Sumber Dana)' : 'Metode Pembayaran / Rekening'}
+            </label>
+            <div className="method-chips-scroll">
+              {[...paymentMethodsList]
+                .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))
+                .map(m => {
+                  const isCash = m.icon === 'Banknote' || m.name.toLowerCase().includes('tunai') || m.name.toLowerCase().includes('cash');
+                  const isEwallet = m.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => m.name.toLowerCase().includes(e));
+
+                  return (
+                    <button 
+                      key={m.id}
+                      type="button"
+                      className={`method-chip-btn ${paymentMethod === m.name ? 'selected' : ''} ${m.isPrimary ? 'is-primary-chip' : ''}`}
+                      onClick={() => setPaymentMethod(m.name)}
+                    >
+                      {isCash ? <Banknote size={13} /> : isEwallet ? <Smartphone size={13} /> : <CreditCard size={13} />}
+                      <span>{m.name}</span>
+                      {m.isPrimary && (
+                        <span className="chip-star-tag" title="Rekening Utama">
+                          <Star size={9} fill="currentColor" /> Utama
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
             </div>
           </div>
+
+          {/* Destination Account (Only for Transfer / Tabungan) */}
+          {type === 'transfer' && (
+            <div className="input-group">
+              <label className="input-label text-inc">
+                2. Ke Rekening Tujuan (Masuk Menambah Saldo)
+              </label>
+              <div className="method-chips-scroll">
+                {[...paymentMethodsList]
+                  .map(m => {
+                    const isSelected = targetAccount === m.name;
+                    const isSource = paymentMethod === m.name;
+                    const isCash = m.icon === 'Banknote' || m.name.toLowerCase().includes('tunai') || m.name.toLowerCase().includes('cash');
+                    const isEwallet = m.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => m.name.toLowerCase().includes(e));
+
+                    return (
+                      <button 
+                        key={m.id}
+                        type="button"
+                        disabled={isSource}
+                        className={`method-chip-btn ${isSelected ? 'selected' : ''} ${isSource ? 'opacity-40' : ''}`}
+                        onClick={() => setTargetAccount(m.name)}
+                        title={isSource ? 'Tidak bisa memilih rekening yang sama' : `Tujuan: ${m.name}`}
+                      >
+                        {isCash ? <Banknote size={13} /> : isEwallet ? <Smartphone size={13} /> : <CreditCard size={13} />}
+                        <span>{m.name}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
 
           {/* Date & Time Row */}
           <div className="form-row-2">
@@ -252,36 +320,6 @@ export default function TransactionModal({
                   onChange={(e) => setTime(e.target.value)}
                 />
               </div>
-            </div>
-          </div>
-
-          {/* Payment Method Selector */}
-          <div className="input-group">
-            <label className="input-label">Metode Pembayaran / Rekening</label>
-            <div className="method-chips-scroll">
-              {[...paymentMethodsList]
-                .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))
-                .map(m => {
-                  const isCash = m.icon === 'Banknote' || m.name.toLowerCase().includes('tunai') || m.name.toLowerCase().includes('cash');
-                  const isEwallet = m.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => m.name.toLowerCase().includes(e));
-
-                  return (
-                    <button 
-                      key={m.id}
-                      type="button"
-                      className={`method-chip-btn ${paymentMethod === m.name ? 'selected' : ''} ${m.isPrimary ? 'is-primary-chip' : ''}`}
-                      onClick={() => setPaymentMethod(m.name)}
-                    >
-                      {isCash ? <Banknote size={13} /> : isEwallet ? <Smartphone size={13} /> : <CreditCard size={13} />}
-                      <span>{m.name}</span>
-                      {m.isPrimary && (
-                        <span className="chip-star-tag" title="Rekening Utama">
-                          <Star size={9} fill="currentColor" /> Utama
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
             </div>
           </div>
 

@@ -111,17 +111,37 @@ export default function DailyExpenses({
         let currentMonthExp = 0;
 
         (allTransactions || []).forEach(t => {
-          if (!t.date || !t.paymentMethod) return;
-          if (t.paymentMethod.toLowerCase() === method.name.toLowerCase()) {
-            const monthPrefix = t.date.slice(0, 7);
-            if (monthPrefix <= selectedMonthYear) {
-              if (t.type === 'income') totalIncUpToMonth += (t.amount || 0);
-              else totalExpUpToMonth += (t.amount || 0);
-            }
-            if (monthPrefix === selectedMonthYear) {
-              if (t.type === 'income') currentMonthInc += (t.amount || 0);
-              else currentMonthExp += (t.amount || 0);
-            }
+          if (!t.date) return;
+          const monthPrefix = t.date.slice(0, 7);
+          const isUpToMonth = monthPrefix <= selectedMonthYear;
+          const isCurrentMonth = monthPrefix === selectedMonthYear;
+
+          const sourceMethod = (t.paymentMethod || '').trim().toLowerCase();
+          const targetMethod = (t.targetPaymentMethod || 
+            (t.notes?.match(/\[to:([^\]]+)\]/i)?.[1]) ||
+            (t.title?.toLowerCase().includes('tabungan lily') ? 'BCA' : '')
+          ).trim().toLowerCase();
+
+          const currentMethodName = method.name.trim().toLowerCase();
+
+          // Inflow to this account:
+          // 1. Regular income received in this account
+          // 2. OR Savings/Transfer arriving in this account (targetMethod)
+          const isInflow = (t.type === 'income' && sourceMethod === currentMethodName) ||
+            (targetMethod && targetMethod === currentMethodName && sourceMethod !== currentMethodName);
+
+          // Outflow from this account:
+          // 1. Regular expense or transfer paid out of this account (sourceMethod)
+          const isOutflow = ((t.type === 'expense' || t.type === 'transfer' || targetMethod) && sourceMethod === currentMethodName);
+
+          if (isUpToMonth) {
+            if (isInflow) totalIncUpToMonth += (t.amount || 0);
+            if (isOutflow) totalExpUpToMonth += (t.amount || 0);
+          }
+
+          if (isCurrentMonth) {
+            if (isInflow) currentMonthInc += (t.amount || 0);
+            if (isOutflow) currentMonthExp += (t.amount || 0);
           }
         });
 
@@ -385,6 +405,11 @@ export default function DailyExpenses({
               <div className="zen-items-list">
                 {group.items.map(item => {
                   const visual = getItemVisual(item);
+                  const destAccount = item.targetPaymentMethod || 
+                    (item.notes?.match(/\[to:([^\]]+)\]/i)?.[1]) ||
+                    (item.title?.toLowerCase().includes('tabungan lily') ? 'BCA' : null);
+                  const isTransfer = Boolean(destAccount && destAccount.toLowerCase() !== (item.paymentMethod || '').toLowerCase());
+
                   return (
                     <div 
                       key={item.id} 
@@ -404,13 +429,26 @@ export default function DailyExpenses({
                         </div>
 
                       <div className="zen-tx-details">
-                        <span className="zen-tx-title">{item.title}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="zen-tx-title">{item.title}</span>
+                          {isTransfer && (
+                            <span className="badge badge-success text-2xs py-0 px-1 font-medium">
+                              Tabungan {destAccount}
+                            </span>
+                          )}
+                        </div>
                         <div className="zen-tx-meta">
                           <span className="zen-meta-cat">{item.category}</span>
                           {item.paymentMethod && (
                             <>
                               <span className="zen-meta-dot">•</span>
-                              <span className="zen-meta-payment">{item.paymentMethod}</span>
+                              <span className="zen-meta-payment">
+                                {isTransfer ? (
+                                  <strong className="text-inc font-medium">{item.paymentMethod} ➔ {destAccount}</strong>
+                                ) : (
+                                  item.paymentMethod
+                                )}
+                              </span>
                             </>
                           )}
                           {item.notes && (
@@ -424,8 +462,8 @@ export default function DailyExpenses({
                     </div>
 
                     <div className="zen-tx-right">
-                      <span className={`zen-tx-amount font-mono ${item.type === 'income' ? 'text-inc' : 'text-exp'}`}>
-                        {item.type === 'income' ? '+' : '-'}{formatRupiah(item.amount)}
+                      <span className={`zen-tx-amount font-mono ${item.type === 'income' ? 'text-inc' : (isTransfer ? 'text-inc font-medium' : 'text-exp')}`}>
+                        {item.type === 'income' ? '+' : (isTransfer ? '➔ ' : '-')}{formatRupiah(item.amount)}
                       </span>
 
                       <div className="zen-tx-actions" onClick={(e) => e.stopPropagation()}>

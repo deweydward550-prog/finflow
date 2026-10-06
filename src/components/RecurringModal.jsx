@@ -22,6 +22,8 @@ export default function RecurringModal({
     return initialData?.paymentMethod || getPrimaryPaymentMethod()?.name || 'BSI';
   });
   const [paymentMethodsList, setPaymentMethodsList] = useState(() => getCustomPaymentMethods());
+  const [isSavings, setIsSavings] = useState(false);
+  const [targetPaymentMethod, setTargetPaymentMethod] = useState('BCA');
   const [icon, setIcon] = useState('Zap');
   const [color, setColor] = useState('#3B82F6');
   const [notes, setNotes] = useState('');
@@ -49,26 +51,49 @@ export default function RecurringModal({
     const methods = getCustomPaymentMethods();
     setPaymentMethodsList(methods);
     const primary = getPrimaryPaymentMethod();
+    const defaultTarget = methods.find(m => m.name !== (primary?.name || 'BSI'))?.name || 'BCA';
 
     if (initialData) {
+      const isSav = Boolean(
+        initialData.isSavings || 
+        initialData.targetPaymentMethod || 
+        initialData.title?.toLowerCase().includes('tabungan') || 
+        initialData.title?.toLowerCase().includes('lily')
+      );
       setTitle(initialData.title || '');
       setAmount(initialData.amount ? formatAmountInput(initialData.amount) : '');
       setDueDay(initialData.dueDay || 5);
       setPaymentMethod(initialData.paymentMethod || primary?.name || 'BSI');
-      setIcon(initialData.icon || 'Zap');
-      setColor(initialData.color || '#3B82F6');
+      setIsSavings(isSav);
+      setTargetPaymentMethod(initialData.targetPaymentMethod || (initialData.paymentMethod === 'BCA' ? 'BSI' : 'BCA'));
+      setIcon(initialData.icon || (isSav ? 'Wallet' : 'Zap'));
+      setColor(initialData.color || (isSav ? '#10B981' : '#3B82F6'));
       setNotes(initialData.notes || '');
     } else {
       setTitle('');
       setAmount('');
       setDueDay(5);
       setPaymentMethod(primary?.name || 'BSI');
+      setIsSavings(false);
+      setTargetPaymentMethod(defaultTarget);
       setIcon('Wifi');
       setColor('#3B82F6');
       setNotes('');
     }
     setError('');
   }, [initialData, isOpen]);
+
+  const handleToggleSavings = (enableSavings) => {
+    setIsSavings(enableSavings);
+    if (enableSavings) {
+      if (icon === 'Zap' || icon === 'Wifi') setIcon('Wallet');
+      if (color === '#3B82F6') setColor('#10B981');
+      if (!targetPaymentMethod || targetPaymentMethod === paymentMethod) {
+        const other = paymentMethodsList.find(m => m.name !== paymentMethod)?.name || 'BCA';
+        setTargetPaymentMethod(other);
+      }
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -78,11 +103,15 @@ export default function RecurringModal({
       return;
     }
     if (!title.trim()) {
-      setError('Masukkan nama pengeluaran rutin');
+      setError('Masukkan nama pengeluaran / tabungan rutin');
       return;
     }
     if (dueDay < 1 || dueDay > 31) {
       setError('Pilih tanggal jatuh tempo antara 1 - 31');
+      return;
+    }
+    if (isSavings && paymentMethod === targetPaymentMethod) {
+      setError('Rekening sumber dan rekening tujuan tidak boleh sama');
       return;
     }
 
@@ -92,10 +121,12 @@ export default function RecurringModal({
       ...(initialData?.id ? { id: initialData.id } : {}),
       title: title.trim(),
       amount: numAmount,
-      category: initialData?.category || 'Tagihan & Utilitas',
+      category: isSavings ? 'Tabungan & Investasi' : (initialData?.category || 'Tagihan & Utilitas'),
       dueDay: parseInt(dueDay, 10),
       billingCycle: 'monthly',
       paymentMethod: paymentMethod || currentPrimary?.name || 'BSI',
+      targetPaymentMethod: isSavings ? targetPaymentMethod : undefined,
+      isSavings: isSavings,
       icon,
       color,
       notes: notes.trim(),
@@ -111,9 +142,9 @@ export default function RecurringModal({
         <div className="modal-header">
           <div className="modal-title-wrap">
             <h3 className="modal-title">
-              {initialData ? 'Edit Tagihan Rutin' : 'Tambah Pengeluaran Rutin Bulanan'}
+              {initialData ? (isSavings ? 'Edit Tabungan Rutin' : 'Edit Tagihan Rutin') : 'Tambah Misi Rutin Bulanan'}
             </h3>
-            <span className="text-muted text-xs">Jadwal pengeluaran tetap berulang setiap bulan</span>
+            <span className="text-muted text-xs">Jadwal pengeluaran atau tabungan berulang setiap bulan</span>
           </div>
           <button className="btn-icon-subtle" onClick={onClose} title="Tutup">
             <X size={18} />
@@ -122,9 +153,31 @@ export default function RecurringModal({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="modal-body compact-form-body">
+          {/* Mission Type Segmented Toggle */}
+          <div className="type-toggle-group full-width mb-2">
+            <button 
+              type="button"
+              className={`type-toggle-btn type-expense ${!isSavings ? 'active' : ''}`}
+              onClick={() => handleToggleSavings(false)}
+            >
+              <Zap size={14} />
+              <span>Tagihan / Beban Rutin</span>
+            </button>
+            <button 
+              type="button"
+              className={`type-toggle-btn type-income ${isSavings ? 'active' : ''}`}
+              onClick={() => handleToggleSavings(true)}
+            >
+              <Wallet size={14} />
+              <span>Tabungan / Pindah Rekening</span>
+            </button>
+          </div>
+
           {/* Amount Card */}
           <div className="amount-input-card">
-            <label className="amount-label">Nominal Tagihan per Bulan (Rp)</label>
+            <label className="amount-label">
+              {isSavings ? 'Nominal Tabungan per Bulan (Rp)' : 'Nominal Tagihan per Bulan (Rp)'}
+            </label>
             <div className="amount-input-wrapper">
               <span className="currency-prefix">Rp</span>
               <input 
@@ -141,10 +194,12 @@ export default function RecurringModal({
 
           {/* Title */}
           <div className="input-group">
-            <label className="input-label">Nama Pengeluaran / Tagihan</label>
+            <label className="input-label">
+              {isSavings ? 'Nama Tabungan / Misi' : 'Nama Pengeluaran / Tagihan'}
+            </label>
             <input 
               type="text"
-              placeholder="Contoh: Tagihan Wi-Fi, Listrik PLN, Kost..."
+              placeholder={isSavings ? 'Contoh: Tabungan Lily, Tabungan Emas, Deposito...' : 'Contoh: Tagihan Wi-Fi, Listrik PLN, Kost...'}
               className="input-control"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -169,9 +224,11 @@ export default function RecurringModal({
             </div>
           </div>
 
-          {/* Payment Method / Account */}
+          {/* Source Account */}
           <div className="input-group">
-            <label className="input-label">Potong dari Rekening / Sumber Dana</label>
+            <label className="input-label">
+              {isSavings ? '1. Potong dari Rekening (Sumber Dana)' : 'Potong dari Rekening / Sumber Dana'}
+            </label>
             <div className="method-chips-scroll">
               {[...paymentMethodsList]
                 .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))
@@ -199,6 +256,46 @@ export default function RecurringModal({
                 })}
             </div>
           </div>
+
+          {/* Target Account (Only for Savings / Transfer) */}
+          {isSavings && (
+            <div className="input-group">
+              <label className="input-label text-inc">
+                2. Masuk ke Rekening Tabungan (Tujuan)
+              </label>
+              <div className="method-chips-scroll">
+                {[...paymentMethodsList]
+                  .map(m => {
+                    const isSelected = targetPaymentMethod === m.name;
+                    const isSource = paymentMethod === m.name;
+                    const isCash = m.icon === 'Banknote' || m.name.toLowerCase().includes('tunai') || m.name.toLowerCase().includes('cash');
+                    const isEwallet = m.icon === 'Smartphone' || ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => m.name.toLowerCase().includes(e));
+
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        disabled={isSource}
+                        className={`method-chip-btn ${isSelected ? 'selected' : ''} ${isSource ? 'opacity-40' : ''}`}
+                        onClick={() => setTargetPaymentMethod(m.name)}
+                        title={isSource ? 'Tidak bisa memilih rekening yang sama dengan sumber' : `Simpan ke ${m.name}`}
+                      >
+                        {isCash ? <Banknote size={13} /> : isEwallet ? <Smartphone size={13} /> : <CreditCard size={13} />}
+                        <span>{m.name}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+
+              {/* Informative helper banner */}
+              <div className="zen-savings-helper-banner">
+                <Sparkles size={14} className="text-inc" />
+                <span>
+                  Saat misi diselesaikan, uang <strong>{paymentMethod}</strong> dipindahkan masuk ke <strong>{targetPaymentMethod}</strong> (menambah saldo rekening tujuan).
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Icon & Color selector in 2 columns */}
           <div className="form-row-2">
@@ -237,10 +334,10 @@ export default function RecurringModal({
 
           {/* Notes */}
           <div className="input-group">
-            <label className="input-label">Catatan / No. Pelanggan (Opsional)</label>
+            <label className="input-label">Catatan / Keterangan (Opsional)</label>
             <input 
               type="text"
-              placeholder="Contoh: ID Pelanggan PLN 5382910..."
+              placeholder={isSavings ? 'Contoh: Rekening Lily Tabungan Pendidikan...' : 'Contoh: ID Pelanggan PLN 5382910...'}
               className="input-control"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}

@@ -353,9 +353,9 @@ export default function App() {
       const primary = getPrimaryPaymentMethod();
       const primaryName = primary ? primary.name : 'BSI';
 
-      const targetMethod = (recurringItem.paymentMethod && recurringItem.paymentMethod !== 'BCA')
-        ? recurringItem.paymentMethod
-        : primaryName;
+      const sourceMethod = recurringItem.paymentMethod || primaryName;
+      const destMethod = recurringItem.targetPaymentMethod || (recurringItem.title?.toLowerCase().includes('tabungan lily') ? 'BCA' : null);
+      const isSavingsTransfer = Boolean(destMethod && destMethod !== sourceMethod);
 
       const cfg = getSupabaseConfig();
       if (cfg.isConfigured) {
@@ -363,12 +363,15 @@ export default function App() {
         const txPayload = {
           title: recurringItem.title,
           amount: recurringItem.amount,
-          type: 'expense',
-          category: recurringItem.category,
+          type: isSavingsTransfer ? 'transfer' : 'expense',
+          category: isSavingsTransfer ? 'Tabungan & Investasi' : (recurringItem.category || 'Tagihan & Utilitas'),
           date: paidDate,
           time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-          paymentMethod: targetMethod,
-          notes: `Pembayaran Rutin Bulanan (${recurringItem.title})`,
+          paymentMethod: sourceMethod,
+          targetPaymentMethod: isSavingsTransfer ? destMethod : undefined,
+          notes: isSavingsTransfer 
+            ? `Tabungan Rutin (${recurringItem.title}) dari ${sourceMethod} ke ${destMethod} [to:${destMethod}]`
+            : `Pembayaran Rutin Bulanan (${recurringItem.title})`,
           recurringId: recurringItem.id
         };
         const createdTx = await insertTransactionToSupabase(txPayload);
@@ -385,11 +388,15 @@ export default function App() {
           recurring: recurringItem,
           monthYear: selectedMonthYear,
           paidDate,
-          paymentMethod: targetMethod
+          paymentMethod: sourceMethod
         });
       }
 
-      showToast(`⚔️ Misi "${recurringItem.title}" selesai! (${targetMethod})`, 'success');
+      if (isSavingsTransfer) {
+        showToast(`🏦 Tabungan "${recurringItem.title}" berhasil dialokasikan: ${sourceMethod} ➔ ${destMethod}!`, 'success');
+      } else {
+        showToast(`⚔️ Misi "${recurringItem.title}" selesai! (${sourceMethod})`, 'success');
+      }
       await loadData();
     } catch (err) {
       showToast('Gagal menandai lunas: ' + err.message, 'error');

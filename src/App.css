@@ -3115,3 +3115,78 @@
   to { transform: rotate(360deg); }
 }
 
+/* =========================================
+   TYPE TOGGLE BUTTONS & SAVINGS BANNERS
+   ========================================= */
+.type-toggle-group {
+  display: flex;
+  background: var(--bg-hover);
+  padding: 0.25rem;
+  border-radius: var(--radius-md);
+  gap: 0.25rem;
+  border: 1px solid var(--border-hairline);
+}
+
+.type-toggle-group.full-width {
+  width: 100%;
+}
+
+.type-toggle-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: calc(var(--radius-md) - 2px);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.775rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.type-toggle-btn:hover:not(.active) {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.type-toggle-btn.active {
+  background: var(--bg-surface, var(--bg-main));
+  color: var(--text-main);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.type-toggle-btn.type-expense.active {
+  color: var(--expense);
+}
+
+.type-toggle-btn.type-income.active {
+  color: var(--income);
+}
+
+.type-toggle-btn.type-transfer.active {
+  color: #10B981;
+}
+
+.zen-savings-helper-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: var(--text-secondary);
+  font-size: 0.725rem;
+  line-height: 1.45;
+  margin-top: 0.4rem;
+}
+
+.text-transfer {
+  color: #10B981;
+}
+
+

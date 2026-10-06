@@ -86,9 +86,19 @@ export default function RecurringManagerModal({
                         {getCategoryIcon(item.icon || item.category, 16)}
                       </div>
                       <div className="manage-rec-info">
-                        <span className="manage-rec-title">{item.title}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="manage-rec-title">{item.title}</span>
+                          {(item.targetPaymentMethod || item.isSavings) && (
+                            <span className="badge badge-success text-2xs py-0 px-1 font-medium">Tabungan</span>
+                          )}
+                        </div>
                         <span className="manage-rec-sub">
-                          Jatuh Tempo: <strong>Tgl {item.dueDay}</strong> • {item.category}
+                          Jatuh Tempo: <strong>Tgl {item.dueDay}</strong>
+                          {(item.targetPaymentMethod || item.isSavings) ? (
+                            <> • <strong className="text-inc">{item.paymentMethod || 'BSI'} ➔ {item.targetPaymentMethod || 'BCA'}</strong></>
+                          ) : (
+                            <> • {item.paymentMethod || 'BSI'} • {item.category}</>
+                          )}
                         </span>
                       </div>
                     </div>
