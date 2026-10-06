@@ -11,7 +11,10 @@ import RecurringManagerModal from './components/RecurringManagerModal';
 import SettingsModal from './components/SettingsModal';
 import ConfirmDialog from './components/ConfirmDialog';
 import Toast from './components/Toast';
-import { pushDatabaseToTelegram, getTelegramConfig, initTelegramAutoSync } from './services/telegramDb';
+import { 
+  pushDatabaseToTelegram, pullDatabaseFromTelegram, 
+  getTelegramConfig, initTelegramAutoSync 
+} from './services/telegramDb';
 import { initWhatsAppSync } from './services/whatsappSync';
 import './App.css';
 
@@ -29,6 +32,7 @@ export default function App() {
   const [recurringList, setRecurringList] = useState([]);
   const [recurringPayments, setRecurringPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isCloudSyncing, setIsCloudSyncing] = useState(false);
 
   // Modals
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -73,10 +77,24 @@ export default function App() {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  // Load all DB data
+  // Load all DB data with proactive cloud check on boot
   const loadData = useCallback(async () => {
     try {
-      await seedInitialDataIfEmpty();
+      // Check if local database has records
+      const txCount = await db.transactions.count();
+      if (txCount === 0) {
+        // Attempt to pull latest state directly from cloud before seeding sample dummy data
+        try {
+          const cloudRes = await pullDatabaseFromTelegram(true);
+          if (!cloudRes || !cloudRes.success) {
+            await seedInitialDataIfEmpty();
+          }
+        } catch {
+          await seedInitialDataIfEmpty();
+        }
+      } else {
+        await seedInitialDataIfEmpty();
+      }
       
       const txs = await db.transactions.toArray();
       const recurring = await db.recurringExpenses.toArray();
@@ -127,12 +145,15 @@ export default function App() {
     }
   }, []);
 
-  // Real-time Telegram Cloud Sync Listener & Background Worker (Syncs across devices)
+  // Real-time Telegram Cloud Sync Listener & Background Worker (Instant sync across devices)
   useEffect(() => {
     const cleanup = initTelegramAutoSync({
       onDataUpdated: () => {
         loadData();
-        showToast('☁️ Data keuangan tersinkronisasi dari Telegram Cloud!', 'info');
+        showToast('☁️ Data keuangan tersinkronisasi otomatis dari Cloud!', 'info');
+      },
+      onSyncStateChange: (syncing) => {
+        setIsCloudSyncing(syncing);
       }
     });
     return cleanup;
@@ -363,6 +384,7 @@ export default function App() {
         setSelectedMonthYear={setSelectedMonthYear}
         theme={theme}
         toggleTheme={toggleTheme}
+        isCloudSyncing={isCloudSyncing}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenNewTransaction={() => {
           setEditingTx(null);

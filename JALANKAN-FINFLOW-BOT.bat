@@ -5,6 +5,9 @@ cd /d "%~dp0"
 echo ========================================================
 echo        FINFLOW WHATSAPP BOT & TUNNEL LAUNCHER
 echo ========================================================
+echo Memeriksa dan membersihkan proses lama...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\kill-bot.ps1" >nul 2>&1
+
 echo Menjalankan bot dan HTTPS tunnel di latar belakang (Silent Mode)...
 echo.
 

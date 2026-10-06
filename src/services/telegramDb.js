@@ -297,14 +297,15 @@ export async function pullDatabaseFromTelegram(isAutoSync = false) {
   };
 }
 
-// Background auto-sync worker
-export function initTelegramAutoSync({ onDataUpdated }) {
+// Background real-time auto-sync worker
+export function initTelegramAutoSync({ onDataUpdated, onSyncStateChange }) {
   let isSyncing = false;
 
   const runSync = async () => {
     if (isSyncing) return;
     try {
       isSyncing = true;
+      onSyncStateChange?.(true);
       const res = await pullDatabaseFromTelegram(true);
       if (res && res.success && onDataUpdated) {
         onDataUpdated(res);
@@ -313,13 +314,14 @@ export function initTelegramAutoSync({ onDataUpdated }) {
       // Background sync silently catches error
     } finally {
       isSyncing = false;
+      onSyncStateChange?.(false);
     }
   };
 
-  // 1. Initial sync on boot
+  // 1. Initial proactive sync on boot
   runSync();
 
-  // 2. Sync when browser tab becomes active
+  // 2. Sync immediately when tab becomes visible or focused
   const handleVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
       runSync();
@@ -327,13 +329,24 @@ export function initTelegramAutoSync({ onDataUpdated }) {
   };
   document.addEventListener('visibilitychange', handleVisibilityChange);
   window.addEventListener('focus', runSync);
+  window.addEventListener('online', runSync);
 
-  // 3. Periodic background sync every 30 seconds
-  const intervalId = setInterval(runSync, 30000);
+  // 3. Listen to manual force sync events across app
+  const handleForceSync = () => runSync();
+  window.addEventListener('finflow_force_cloud_sync', handleForceSync);
+
+  // 4. Ultra-fast background sync interval (every 4 seconds for instant real-time sync across devices)
+  const intervalId = setInterval(() => {
+    if (document.visibilityState === 'visible') {
+      runSync();
+    }
+  }, 4000);
 
   return () => {
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     window.removeEventListener('focus', runSync);
+    window.removeEventListener('online', runSync);
+    window.removeEventListener('finflow_force_cloud_sync', handleForceSync);
     clearInterval(intervalId);
   };
 }

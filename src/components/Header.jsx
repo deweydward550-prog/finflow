@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   ChevronLeft, ChevronRight, Moon, Sun, 
-  Settings, Plus, Send, Swords, CalendarClock
+  Settings, Plus, Send, Swords, CalendarClock, Cloud
 } from 'lucide-react';
 import { formatMonthYear } from '../utils/formatters';
 
@@ -10,6 +10,7 @@ export default function Header({
   setSelectedMonthYear,
   theme,
   toggleTheme,
+  isCloudSyncing = false,
   onOpenSettings,
   onOpenNewTransaction,
   onOpenManageRecurring
@@ -43,9 +44,18 @@ export default function Header({
   return (
     <header className="zen-header">
       <div className="zen-top-bar">
-        {/* Brand */}
+        {/* Brand with Live Real-time Cloud Sync Badge */}
         <div className="zen-brand">
           <span className="zen-brand-title">FinFlow</span>
+          <div 
+            className={`zen-cloud-sync-badge ${isCloudSyncing ? 'syncing' : 'active'}`}
+            title={isCloudSyncing ? "Menyinkronkan data cloud..." : "Cloud Sync Real-time Aktif (Multi-Device)"}
+            onClick={onOpenSettings}
+            style={{ cursor: 'pointer' }}
+          >
+            <Cloud size={11} className={isCloudSyncing ? 'cloud-spin' : 'cloud-pulse'} />
+            <span className="zen-cloud-text">{isCloudSyncing ? 'Sync' : 'Cloud'}</span>
+          </div>
         </div>
 
         {/* Month Selector */}

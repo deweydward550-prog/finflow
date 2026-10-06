@@ -4,10 +4,10 @@ cd /d "%~dp0"
 echo ========================================================
 echo             MENGHENTIKAN FINFLOW BOT SERVER
 echo ========================================================
-echo Mematikan proses background FinFlow pada port 5051...
+echo Mematikan seluruh proses background FinFlow Bot...
 echo.
 
-powershell.exe -NoProfile -Command "try { $conns = Get-NetTCPConnection -LocalPort 5051 -ErrorAction SilentlyContinue; if ($conns) { foreach ($c in $conns) { Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue } } } catch {}; $lines = netstat -ano | Select-String ':5051'; foreach ($line in $lines) { $parts = $line.ToString().Trim() -split '\s+'; $pId = $parts[-1]; if ($pId -match '^\d+$') { Stop-Process -Id [int]$pId -Force -ErrorAction SilentlyContinue } }"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\kill-bot.ps1"
 
 echo.
 echo [OK] Server FinFlow Bot berhasil dihentikan.

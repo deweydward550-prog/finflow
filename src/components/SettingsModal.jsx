@@ -836,6 +836,47 @@ export default function SettingsModal({
                 )}
               </div>
 
+              {/* QR Code Scan Live Card */}
+              {(waServerStatus.status === 'qr' || waServerStatus.hasQR) && (
+                <div className="wa-card" style={{ textAlign: 'center', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: '#f59e0b', fontWeight: 700, fontSize: '0.9rem' }}>
+                    <Sparkles size={16} />
+                    <span>Scan QR WhatsApp Tersedia</span>
+                  </div>
+                  <p className="text-muted text-xs" style={{ marginTop: '0.35rem' }}>
+                    Buka WhatsApp di HP &gt; Perangkat Tertaut &gt; Tautkan Perangkat lalu scan:
+                  </p>
+
+                  {waServerStatus.qrDataUrl ? (
+                    <div style={{ margin: '0.75rem auto', padding: '0.75rem', background: '#fff', borderRadius: '12px', display: 'inline-block', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+                      <img src={waServerStatus.qrDataUrl} alt="QR Code WhatsApp" style={{ width: '180px', height: '180px', display: 'block', imageRendering: 'pixelated' }} />
+                    </div>
+                  ) : null}
+
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    <a 
+                      href={`${serverUrlInput || 'http://localhost:5051'}/qr`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="btn btn-primary btn-sm"
+                      style={{ fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                    >
+                      <ExternalLink size={12} />
+                      <span>Buka Scanner di Tab Baru</span>
+                    </a>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: '0.75rem' }}
+                      onClick={() => refreshWaStatus()}
+                    >
+                      <RefreshCw size={12} />
+                      <span>Refresh QR</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* 2. Terminal Command Card */}
               <div className="wa-card">
                 <div className="wa-cmd-label">
