@@ -26,3 +26,8 @@ dist-ssr
 # WhatsApp Baileys auth session
 server/auth_info_baileys/
 auth_info_baileys/
+
+# Local server configs & env
+.env
+.env.*
+server/data/supabase_config.json
