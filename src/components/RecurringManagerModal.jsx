@@ -8,12 +8,19 @@ import { formatRupiah, getCategoryIcon } from '../utils/formatters';
 export default function RecurringManagerModal({
   isOpen,
   onClose,
-  recurringList,
+  recurringList = [],
   onOpenNewRecurring,
+  onAddNew,
   onEditRecurring,
-  onDeleteRecurring
+  onEdit,
+  onDeleteRecurring,
+  onDelete
 }) {
   if (!isOpen) return null;
+
+  const handleAddNew = onOpenNewRecurring || onAddNew;
+  const handleEdit = onEditRecurring || onEdit;
+  const handleDelete = onDeleteRecurring || onDelete;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -36,7 +43,11 @@ export default function RecurringManagerModal({
               TOTAL {recurringList.length} MISI TAGIHAN
             </span>
             {recurringList.length > 0 && (
-              <button className="btn btn-sm btn-primary" onClick={onOpenNewRecurring}>
+              <button 
+                type="button" 
+                className="btn btn-sm btn-primary" 
+                onClick={() => handleAddNew?.()}
+              >
                 <Plus size={14} />
                 <span>Tambah Tagihan Baru</span>
               </button>
@@ -48,7 +59,11 @@ export default function RecurringManagerModal({
               <RefreshCw size={28} className="text-muted" />
               <h4>Belum Ada Template Tagihan</h4>
               <p className="text-muted text-xs">Tambahkan tagihan bulanan seperti Wi-Fi, Kost, atau Listrik.</p>
-              <button className="btn btn-sm btn-primary mt-2" onClick={onOpenNewRecurring}>
+              <button 
+                type="button" 
+                className="btn btn-sm btn-primary mt-2" 
+                onClick={() => handleAddNew?.()}
+              >
                 <Plus size={14} />
                 <span>Tambah Tagihan Baru</span>
               </button>
@@ -81,15 +96,17 @@ export default function RecurringManagerModal({
 
                     <div className="manage-rec-actions">
                       <button 
+                        type="button"
                         className="btn-icon-subtle" 
-                        onClick={() => onEditRecurring(item)}
+                        onClick={() => handleEdit?.(item)}
                         title="Edit Tagihan"
                       >
                         <Edit2 size={13} />
                       </button>
                       <button 
+                        type="button"
                         className="btn-icon-subtle btn-delete" 
-                        onClick={() => onDeleteRecurring(item)}
+                        onClick={() => handleDelete?.(item)}
                         title="Hapus Tagihan"
                       >
                         <Trash2 size={13} />

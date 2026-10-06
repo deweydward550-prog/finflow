@@ -480,10 +480,22 @@ export default function App() {
         recurringList={recurringList}
         recurringPaymentsMap={currentMonthPaymentsMap}
         selectedMonthYear={selectedMonthYear}
+        onOpenNewRecurring={() => {
+          setReturnToManage(true);
+          setIsManageRecurringOpen(false);
+          setEditingRecurring(null);
+          setIsRecurringModalOpen(true);
+        }}
         onAddNew={() => {
           setReturnToManage(true);
           setIsManageRecurringOpen(false);
           setEditingRecurring(null);
+          setIsRecurringModalOpen(true);
+        }}
+        onEditRecurring={(item) => {
+          setReturnToManage(true);
+          setIsManageRecurringOpen(false);
+          setEditingRecurring(item);
           setIsRecurringModalOpen(true);
         }}
         onEdit={(item) => {
@@ -492,6 +504,7 @@ export default function App() {
           setEditingRecurring(item);
           setIsRecurringModalOpen(true);
         }}
+        onDeleteRecurring={promptDeleteRecurring}
         onDelete={promptDeleteRecurring}
         onTogglePaid={handleMarkRecurringPaid}
       />
