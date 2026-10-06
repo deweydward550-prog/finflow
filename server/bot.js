@@ -1199,49 +1199,79 @@ async function startPersistentTunnel() {
 
   try {
     if (currentTunnel) {
-      try { currentTunnel.close(); } catch {}
+      try { 
+        currentTunnel.removeAllListeners?.();
+        currentTunnel.close?.(); 
+      } catch {}
       currentTunnel = null;
     }
 
     console.log(`🌐 Membuka HTTPS Tunnel (Subdomain: ${TUNNEL_SUBDOMAIN})...`);
     
-    // Connect with strict 10-second timeout so it never hangs
-    const tunnelPromise = localtunnel({
-      port: PORT,
-      subdomain: TUNNEL_SUBDOMAIN,
-      local_host: '127.0.0.1'
+    const tunnel = await new Promise((resolve) => {
+      let resolved = false;
+      const timeoutId = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve(null);
+        }
+      }, 10000);
+
+      try {
+        localtunnel({
+          port: PORT,
+          subdomain: TUNNEL_SUBDOMAIN,
+          local_host: '127.0.0.1'
+        }, (err, tun) => {
+          clearTimeout(timeoutId);
+          if (resolved) {
+            if (tun) {
+              try { tun.close(); } catch {}
+            }
+            return;
+          }
+          resolved = true;
+          if (err || !tun) {
+            resolve(null);
+          } else {
+            // Attach error handler immediately to avoid unhandled error events
+            tun.on('error', (tunnelErr) => {
+              console.warn('⚠️ Tunnel error:', tunnelErr?.message || tunnelErr);
+              try { tun.close(); } catch {}
+              currentTunnel = null;
+              setTimeout(startPersistentTunnel, 10000);
+            });
+            tun.on('close', () => {
+              console.log('⚠️ Tunnel terputus. Menghubungkan ulang secara otomatis dalam 10 detik...');
+              currentTunnel = null;
+              setTimeout(startPersistentTunnel, 10000);
+            });
+            resolve(tun);
+          }
+        });
+      } catch (e) {
+        clearTimeout(timeoutId);
+        if (!resolved) {
+          resolved = true;
+          resolve(null);
+        }
+      }
     });
 
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Localtunnel server timed out (10s)')), 10000)
-    );
-
-    currentTunnel = await Promise.race([tunnelPromise, timeoutPromise]);
-
-    console.log('\n======================================================');
-    console.log(`🔒 [HTTPS TUNNEL PERMANEN AKTIF]`);
-    console.log(`🌐 URL Tetap: ${currentTunnel.url}`);
-    console.log(`✨ URL ini siap digunakan saat mengakses dari luar rumah!`);
-    console.log('======================================================\n');
-
-    currentTunnel.on('close', () => {
-      console.log('⚠️ Tunnel terputus. Menghubungkan ulang secara otomatis dalam 10 detik...');
-      currentTunnel = null;
-      isTunnelConnecting = false;
-      setTimeout(startPersistentTunnel, 10000);
-    });
-
-    currentTunnel.on('error', (err) => {
-      console.error('⚠️ Tunnel error:', err.message);
-      currentTunnel = null;
-      isTunnelConnecting = false;
-      setTimeout(startPersistentTunnel, 10000);
-    });
+    if (tunnel && tunnel.url) {
+      currentTunnel = tunnel;
+      console.log('\n======================================================');
+      console.log(`🔒 [HTTPS TUNNEL PERMANEN AKTIF]`);
+      console.log(`🌐 URL Tetap: ${currentTunnel.url}`);
+      console.log(`✨ URL ini siap digunakan saat mengakses dari luar rumah!`);
+      console.log('======================================================\n');
+    } else {
+      console.warn('⚠️ Localtunnel server sedang sibuk/timeout.');
+      console.log('💡 Tips: WhatsApp Bot & Telegram Cloud DB tetap AKTIF & sinkron 100% normal.');
+      setTimeout(startPersistentTunnel, 15000);
+    }
   } catch (err) {
-    console.warn('⚠️ Gagal terhubung ke tunnel publik (Localtunnel sibuk):', err.message);
-    console.log('💡 Tips: WhatsApp Bot & Telegram Cloud DB tetap AKTIF & sinkron 100% normal.');
-    currentTunnel = null;
-    isTunnelConnecting = false;
+    console.warn('⚠️ Tunnel exception:', err?.message || err);
     setTimeout(startPersistentTunnel, 15000);
   } finally {
     isTunnelConnecting = false;
