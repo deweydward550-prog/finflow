@@ -303,159 +303,89 @@ export default function DailyExpenses({
           )}
         </div>
 
-        {/* Dropdown Information Panel - Window Game HUD Aesthetic */}
+        {/* Dropdown Information Panel - Minimalist Game Window HUD */}
         {showAccountBreakdown && (
           <div className="game-hud-window-panel">
-            {/* 1. Game Window Titlebar */}
+            {/* Clean Window Titlebar */}
             <div className="game-hud-titlebar">
               <div className="game-hud-title-left">
-                <span className="game-hud-live-badge">
-                  <span className="game-live-pulse-dot"></span>
-                  LIVE HUD
-                </span>
-                <span className="game-hud-main-title">
-                  VAULT REKENING & ARUS KAS
-                </span>
-                <span className="game-hud-period-tag">
-                  {formatMonthYear(selectedMonthYear)}
-                </span>
+                <span className="game-live-pulse-dot" />
+                <span className="game-hud-main-title">Saldo & Mutasi Rekening</span>
+                <span className="game-hud-period-tag">{formatMonthYear(selectedMonthYear)}</span>
               </div>
               
-              <div className="game-hud-actions">
-                <button
-                  type="button"
-                  className="game-hud-action-btn"
-                  onClick={() => setIsEditBalancesOpen(true)}
-                  title="Ubah Nominal Baseline / Saldo Awal Rekening"
-                >
-                  <Edit3 size={13} />
-                  <span>Atur Saldo Awal</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                className="game-hud-action-btn"
+                onClick={() => setIsEditBalancesOpen(true)}
+                title="Atur Saldo Awal Rekening"
+              >
+                <Edit3 size={12} />
+                <span>Atur Saldo Awal</span>
+              </button>
             </div>
 
-            {/* 2. Global Game Vault Equation Strip (Total Awal + Masuk - Keluar = Total Live) */}
-            <div className="game-vault-summary-strip">
-              <div className="vault-eq-col">
-                <span className="vault-eq-label">SALDO AWAL TOTAL</span>
-                <span className="vault-eq-val">{formatRupiah(vaultTotals.totalPrior)}</span>
-              </div>
-
-              <span className="vault-eq-sign">+</span>
-
-              <div className="vault-eq-col col-inc">
-                <span className="vault-eq-label text-inc">TOTAL MASUK (+)</span>
-                <span className="vault-eq-val text-inc">+{formatRupiah(vaultTotals.totalInc, false)}</span>
-              </div>
-
-              <span className="vault-eq-sign">-</span>
-
-              <div className="vault-eq-col col-exp">
-                <span className="vault-eq-label text-exp">TOTAL KELUAR (-)</span>
-                <span className="vault-eq-val text-exp">-{formatRupiah(vaultTotals.totalExp, false)}</span>
-              </div>
-
-              <span className="vault-eq-sign sign-arrow">➔</span>
-
-              <div className="vault-eq-col col-live">
-                <span className="vault-eq-label text-highlight">SALDO TERKINI (LIVE)</span>
-                <span className="vault-eq-val text-highlight">{formatRupiah(vaultTotals.totalLive)}</span>
-              </div>
-            </div>
-
-            {/* 3. Game Accounts Grid */}
+            {/* Clean Game Account Cards Grid */}
             <div className="game-accounts-grid">
-              {accountBalances.map(acc => {
-                const isNetPos = acc.netChange > 0;
-                const isNetNeg = acc.netChange < 0;
-
-                return (
-                  <div 
-                    key={acc.id} 
-                    className={`game-account-card ${acc.isPrimary ? 'is-primary-slot' : ''}`}
-                    style={{ '--slot-accent': acc.color || '#0060AF' }}
-                  >
-                    {/* Card Header */}
-                    <div className="game-card-header">
-                      <div className="game-card-identity">
-                        <div 
-                          className="game-card-icon-frame" 
-                          style={{ 
-                            color: acc.color || '#0060AF', 
-                            borderColor: `${acc.color || '#0060AF'}40`, 
-                            background: `${acc.color || '#0060AF'}12` 
-                          }}
-                        >
-                          {acc.isCash ? <Banknote size={15} /> : acc.isEwallet ? <Smartphone size={15} /> : <CreditCard size={15} />}
-                        </div>
-                        <div className="game-card-titles">
-                          <div className="game-card-name-row">
-                            <span className="game-card-name">{acc.name}</span>
-                            {acc.isPrimary && (
-                              <span className="game-card-rank-tag" title="Rekening Utama Sistem FinFlow">
-                                <Star size={9} fill="currentColor" /> UTAMA
-                              </span>
-                            )}
-                          </div>
-                          {acc.number && <span className="game-card-account-num">{acc.number}</span>}
-                        </div>
+              {accountBalances.map(acc => (
+                <div 
+                  key={acc.id} 
+                  className={`game-account-card ${acc.isPrimary ? 'is-primary-slot' : ''}`}
+                  style={{ '--slot-accent': acc.color || '#0060AF' }}
+                >
+                  {/* Top: Identitas Rekening & Saldo Terkini */}
+                  <div className="game-card-top-row">
+                    <div className="game-card-identity">
+                      <div 
+                        className="game-card-icon-frame" 
+                        style={{ color: acc.color || '#0060AF' }}
+                      >
+                        {acc.isCash ? <Banknote size={15} /> : acc.isEwallet ? <Smartphone size={15} /> : <CreditCard size={15} />}
                       </div>
-
-                      <div className="game-card-status-badge">
-                        {isNetPos ? (
-                          <span className="net-flow-badge badge-inc" title="Arus kas surplus bulan ini">
-                            <ArrowUpRight size={11} /> +{formatRupiah(acc.netChange, false)}
-                          </span>
-                        ) : isNetNeg ? (
-                          <span className="net-flow-badge badge-exp" title="Arus kas defisit bulan ini">
-                            <ArrowDownRight size={11} /> -{formatRupiah(Math.abs(acc.netChange), false)}
-                          </span>
-                        ) : (
-                          <span className="net-flow-badge badge-neutral" title="Tidak ada mutasi kas bulan ini">
-                            ▬ Tetap
-                          </span>
-                        )}
+                      <div className="game-card-titles">
+                        <div className="game-card-name-row">
+                          <span className="game-card-name">{acc.name}</span>
+                          {acc.isPrimary && (
+                            <span className="game-card-rank-tag">
+                              <Star size={9} fill="currentColor" /> Utama
+                            </span>
+                          )}
+                        </div>
+                        {acc.number && <span className="game-card-account-num">{acc.number}</span>}
                       </div>
                     </div>
 
-                    {/* Core Live Balance Section */}
-                    <div className="game-card-live-section">
-                      <div className="game-card-live-label">
-                        <span className="game-card-live-dot"></span>
-                        SALDO REALTIME (TERKINI)
-                      </div>
-                      <div className={`game-card-live-balance ${acc.balance >= 0 ? 'text-inc' : 'text-exp'}`}>
+                    <div className="game-card-balance-col">
+                      <span className={`game-card-balance-val ${acc.balance >= 0 ? 'text-inc' : 'text-exp'}`}>
                         {acc.balance >= 0 ? '+' : ''}{formatRupiah(acc.balance)}
-                      </div>
-                    </div>
-
-                    {/* Audit Flow Equation Track */}
-                    <div className="game-card-equation-track">
-                      {/* Saldo Sebelumnya */}
-                      <div className="eq-cell cell-prior" title="Saldo awal sebelum mutasi bulan ini">
-                        <span className="eq-cell-sub">Saldo Awal</span>
-                        <span className="eq-cell-val">{formatRupiah(acc.priorBalance, false)}</span>
-                      </div>
-
-                      <span className="eq-track-math">+</span>
-
-                      {/* Masuk (+) */}
-                      <div className="eq-cell cell-inc" title="Total pemasukan & transfer masuk">
-                        <span className="eq-cell-sub text-inc">Masuk (+)</span>
-                        <span className="eq-cell-val text-inc">+{formatRupiah(acc.income, false)}</span>
-                      </div>
-
-                      <span className="eq-track-math">-</span>
-
-                      {/* Keluar (-) */}
-                      <div className="eq-cell cell-exp" title="Total pengeluaran & transfer keluar">
-                        <span className="eq-cell-sub text-exp">Keluar (-)</span>
-                        <span className="eq-cell-val text-exp">-{formatRupiah(acc.expense, false)}</span>
-                      </div>
+                      </span>
+                      <span className="game-card-balance-lbl">Saldo Terkini</span>
                     </div>
                   </div>
-                );
-              })}
+
+                  {/* Bottom: Audit Flow (Awal + Masuk - Keluar) */}
+                  <div className="game-card-equation-row">
+                    <div className="eq-item" title="Saldo awal sebelum mutasi bulan ini">
+                      <span className="eq-lbl">Saldo Awal</span>
+                      <span className="eq-val">{formatRupiah(acc.priorBalance, false)}</span>
+                    </div>
+
+                    <span className="eq-operator">+</span>
+
+                    <div className="eq-item text-inc" title="Total pemasukan bulan ini">
+                      <span className="eq-lbl">Masuk (+)</span>
+                      <span className="eq-val">+{formatRupiah(acc.income, false)}</span>
+                    </div>
+
+                    <span className="eq-operator">-</span>
+
+                    <div className="eq-item text-exp" title="Total pengeluaran bulan ini">
+                      <span className="eq-lbl">Keluar (-)</span>
+                      <span className="eq-val">-{formatRupiah(acc.expense, false)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
