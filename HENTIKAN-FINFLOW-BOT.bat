@@ -12,4 +12,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\kill-bot.p
 echo.
 echo [OK] Server FinFlow Bot berhasil dihentikan.
 echo.
-timeout /t 3
+ping 127.0.0.1 -n 3 >nul 2>&1

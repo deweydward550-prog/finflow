@@ -363,6 +363,10 @@ async function startWhatsAppBot() {
         console.log('⚡ Otomatis tersinkronisasi instan ke Supabase Realtime');
         console.log('🌐 Dashboard: http://localhost:5051');
         console.log('======================================================\n');
+
+        try {
+          await fetchAccountsConfigFromSupabase();
+        } catch {}
       }
 
       if (connection === 'close') {
@@ -781,7 +785,16 @@ function renderDashboardHtml() {
 }
 
 // Start HTTP server & WhatsApp bot
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 [Server] FinFlow Hub berjalan di http://localhost:${PORT}`);
   startWhatsAppBot();
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`⚠️ Port ${PORT} sudah digunakan oleh proses lain. FinFlow Bot sudah berjalan.`);
+    process.exit(0);
+  } else {
+    console.error('Server error:', err);
+  }
 });

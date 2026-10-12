@@ -26,6 +26,12 @@ function Get-ServerStatus {
     }
 }
 
+function Test-AutoStartStatus {
+    $startupDir = [Environment]::GetFolderPath('Startup')
+    $shortcutPath = Join-Path $startupDir "FinFlowWhatsAppBot.lnk"
+    return (Test-Path $shortcutPath)
+}
+
 function Format-Uptime([int]$seconds) {
     if ($seconds -lt 60) { return "$seconds detik" }
     $mins = [Math]::Floor($seconds / 60)
@@ -38,9 +44,11 @@ function Format-Uptime([int]$seconds) {
 
 function Start-FinFlowSilent {
     Write-Host "Memulai FinFlow Bot di latar belakang..." -ForegroundColor Yellow
+    # Ensure auto-start shortcut is present
+    & "$PSScriptRoot\setup-autostart.ps1" | Out-Null
     $vbsPath = "$ROOT_DIR\JALANKAN-FINFLOW-BOT.vbs"
     if (Test-Path $vbsPath) {
-        Start-Process "wscript.exe" -ArgumentList "`"$vbsPath`""
+        Start-Process "wscript.exe" -ArgumentList "`"$vbsPath`" /autostart"
     } else {
         Start-Process "node" -ArgumentList "server/bot.js" -WorkingDirectory $ROOT_DIR -WindowStyle Hidden
     }
@@ -92,28 +100,46 @@ function Show-Logs {
 while ($true) {
     Show-Header
     $status = Get-ServerStatus
+    $isAutoStart = Test-AutoStartStatus
 
     if ($null -eq $status) {
         Write-Host "  [x] Server Bot Lokal     : " -NoNewline
         Write-Host "TIDAK AKTIF (OFFLINE)" -ForegroundColor Red
         Write-Host "  [x] WhatsApp Bot         : " -NoNewline
         Write-Host "OFFLINE" -ForegroundColor Red
+        
+        # Auto-Start status
+        Write-Host "  [v] Auto-Start PC/Laptop : " -NoNewline
+        if ($isAutoStart) {
+            Write-Host "AKTIF (Akan otomatis berjalan saat Windows restart)" -ForegroundColor Green
+        } else {
+            Write-Host "TIDAK AKTIF" -ForegroundColor Yellow
+        }
+
         Write-Host ""
         Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
         Write-Host "Status: Server belum berjalan." -ForegroundColor Yellow
         Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
         Write-Host ""
-        Write-Host "  [1] Jalankan Bot Sekarang (Silent di Latar Belakang)" -ForegroundColor Green
+        Write-Host "  [1] Jalankan Bot Sekarang (Silent di Latar Belakang & Aktifkan Auto-Start)" -ForegroundColor Green
         Write-Host "  [2] Lihat Log Terakhir"
-        Write-Host "  [3] Keluar"
+        Write-Host "  [3] $(if ($isAutoStart) { 'Nonaktifkan' } else { 'Aktifkan' }) Auto-Start Windows saat Restart" -ForegroundColor Cyan
+        Write-Host "  [4] Keluar"
         Write-Host ""
-        $choice = Read-Host "Pilih menu (1-3)"
+        $choice = Read-Host "Pilih menu (1-4)"
 
         if ($choice -eq "1") {
             Start-FinFlowSilent
         } elseif ($choice -eq "2") {
             Show-Logs
         } elseif ($choice -eq "3") {
+            if ($isAutoStart) {
+                & "$PSScriptRoot\remove-autostart.ps1"
+            } else {
+                & "$PSScriptRoot\setup-autostart.ps1"
+            }
+            Start-Sleep -Seconds 2
+        } elseif ($choice -eq "4") {
             break
         }
     } else {
@@ -142,6 +168,22 @@ while ($true) {
             Write-Host "BELUM DIKONFIGURASI (Atur di http://localhost:5051)" -ForegroundColor Yellow
         }
 
+        # Primary Account
+        if ($status.primaryAccount) {
+            Write-Host "  [v] Rekening Utama Aktif : " -NoNewline
+            Write-Host "$($status.primaryAccount)" -ForegroundColor Green
+        }
+
+        # Auto-Start status
+        Write-Host "  [v] Auto-Start PC/Laptop : " -NoNewline
+        if ($isAutoStart) {
+            Write-Host "AKTIF " -ForegroundColor Green -NoNewline
+            Write-Host "(Bot otomatis berjalan saat Windows booting/restart)" -ForegroundColor Cyan
+        } else {
+            Write-Host "TIDAK AKTIF " -ForegroundColor Yellow -NoNewline
+            Write-Host "(Pilih menu [7] untuk mengaktifkan)" -ForegroundColor DarkGray
+        }
+
         # Web QR Scanner
         Write-Host "  [v] Web Dashboard        : " -NoNewline
         Write-Host "http://localhost:5051/qr" -ForegroundColor Yellow
@@ -163,10 +205,11 @@ while ($true) {
         Write-Host "  [4] Reset Sesi WhatsApp (Scan Ulang)"
         Write-Host "  [5] Restart Bot & Server"
         Write-Host "  [6] Hentikan Bot (Stop Server)"
-        Write-Host "  [7] Buka Web FinFlow di Browser"
-        Write-Host "  [8] Keluar"
+        Write-Host "  [7] $(if ($isAutoStart) { 'Nonaktifkan' } else { 'Aktifkan' }) Auto-Start Windows saat Restart" -ForegroundColor Cyan
+        Write-Host "  [8] Buka Web FinFlow di Browser"
+        Write-Host "  [9] Keluar"
         Write-Host ""
-        $choice = Read-Host "Pilih menu (1-8)"
+        $choice = Read-Host "Pilih menu (1-9)"
 
         if ($choice -eq "1") {
             # continue loop
@@ -182,8 +225,15 @@ while ($true) {
         } elseif ($choice -eq "6") {
             Stop-FinFlow
         } elseif ($choice -eq "7") {
-            Start-Process "https://finflow-sigma-three.vercel.app"
+            if ($isAutoStart) {
+                & "$PSScriptRoot\remove-autostart.ps1"
+            } else {
+                & "$PSScriptRoot\setup-autostart.ps1"
+            }
+            Start-Sleep -Seconds 2
         } elseif ($choice -eq "8") {
+            Start-Process "https://finflow-sigma-three.vercel.app"
+        } elseif ($choice -eq "9") {
             break
         }
     }
