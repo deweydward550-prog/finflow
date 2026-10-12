@@ -22,6 +22,7 @@ const PORT = 5051;
 const DATA_DIR = path.join(__dirname, 'data');
 const AUTH_DIR = path.join(__dirname, 'auth_info_baileys');
 const SUPABASE_CONFIG_FILE = path.join(DATA_DIR, 'supabase_config.json');
+const ACCOUNTS_CONFIG_FILE = path.join(DATA_DIR, 'accounts_config.json');
 const LOG_FILE = path.join(DATA_DIR, 'bot.log');
 
 // Ensure directories exist
@@ -86,6 +87,8 @@ function initSupabaseClient() {
     try {
       supabase = createClient(cfg.url.trim(), cfg.anonKey.trim());
       console.log('⚡ [Supabase] Client berhasil diinisialisasi:', cfg.url);
+      fetchAccountsConfigFromSupabase();
+      subscribeToAccountsRealtime();
     } catch (err) {
       console.error('⚠️ [Supabase] Gagal inisialisasi client:', err.message);
       supabase = null;
@@ -95,6 +98,133 @@ function initSupabaseClient() {
     console.log('ℹ️ [Supabase] Belum dikonfigurasi. Atur di http://localhost:5051');
   }
 }
+
+// =========================================================================
+// ACCOUNTS & PRIMARY PAYMENT METHOD MANAGEMENT
+// =========================================================================
+let cachedAccountsConfig = {
+  primaryAccount: 'BSI',
+  accounts: []
+};
+
+function getLocalAccountsConfig() {
+  try {
+    if (fs.existsSync(ACCOUNTS_CONFIG_FILE)) {
+      const content = fs.readFileSync(ACCOUNTS_CONFIG_FILE, 'utf8');
+      const data = JSON.parse(content);
+      if (data) {
+        let primary = data.primaryAccount;
+        let accounts = Array.isArray(data.accounts) ? data.accounts : (Array.isArray(data) ? data : []);
+        if (!primary && accounts.length > 0) {
+          const prim = accounts.find(a => a.isPrimary);
+          if (prim) primary = prim.name;
+        }
+        if (primary || accounts.length > 0) {
+          return {
+            primaryAccount: primary || 'BSI',
+            accounts
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ Gagal membaca accounts_config.json:', err.message);
+  }
+  return null;
+}
+
+function saveLocalAccountsConfig(cfg) {
+  try {
+    fs.writeFileSync(ACCOUNTS_CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('⚠️ Gagal menyimpan accounts_config.json:', err.message);
+  }
+}
+
+async function fetchAccountsConfigFromSupabase() {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('notes')
+      .eq('id', 'sys_payment_methods')
+      .maybeSingle();
+
+    if (!error && data && data.notes) {
+      const methods = JSON.parse(data.notes);
+      if (Array.isArray(methods) && methods.length > 0) {
+        const prim = methods.find(a => a.isPrimary) || methods[0];
+        const primaryAccount = prim?.name || 'BSI';
+        const cfg = {
+          primaryAccount,
+          accounts: methods
+        };
+        saveLocalAccountsConfig(cfg);
+        cachedAccountsConfig = cfg;
+        console.log(`🏦 [Supabase] Sinkronisasi rekening aktif: Rekening Utama = ${primaryAccount}`);
+        return cfg;
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ Gagal sinkronisasi rekening dari Supabase:', err.message);
+  }
+  return null;
+}
+
+// Initialize cached config immediately from local file
+const initialLocal = getLocalAccountsConfig();
+if (initialLocal) {
+  cachedAccountsConfig = initialLocal;
+}
+
+let accountsRealtimeChannel = null;
+function subscribeToAccountsRealtime() {
+  if (!supabase) return;
+  try {
+    if (accountsRealtimeChannel) {
+      try { supabase.removeChannel(accountsRealtimeChannel); } catch {}
+      accountsRealtimeChannel = null;
+    }
+    accountsRealtimeChannel = supabase
+      .channel('server_accounts_channel')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'transactions',
+        filter: 'id=eq.sys_payment_methods'
+      }, async (payload) => {
+        console.log('🔄 [Supabase] Deteksi perubahan rekening dari aplikasi FinFlow!');
+        if (payload.new && payload.new.notes) {
+          try {
+            const methods = JSON.parse(payload.new.notes);
+            if (Array.isArray(methods) && methods.length > 0) {
+              const prim = methods.find(a => a.isPrimary) || methods[0];
+              cachedAccountsConfig = {
+                primaryAccount: prim?.name || 'BSI',
+                accounts: methods
+              };
+              saveLocalAccountsConfig(cachedAccountsConfig);
+              console.log(`🏦 [Supabase] Rekening utama diperbarui secara realtime: ${cachedAccountsConfig.primaryAccount}`);
+              return;
+            }
+          } catch {}
+        }
+        await fetchAccountsConfigFromSupabase();
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn('⚠️ [Supabase] Gagal subscribe channel rekening:', err.message);
+  }
+}
+
+async function getEffectiveAccountsConfig() {
+  const local = getLocalAccountsConfig();
+  if (local && local.primaryAccount) {
+    cachedAccountsConfig = local;
+  }
+  return cachedAccountsConfig;
+}
+
 initSupabaseClient();
 
 // =========================================================================
@@ -271,12 +401,18 @@ async function startWhatsAppBot() {
         // Ignore bot's own responses
         if (text.startsWith('✅ *') || text.includes('FinFlow: Transaksi Baru')) continue;
 
-        // Parse items from chat
-        const parsedItems = parseWhatsAppMessage(text.trim());
+        // Parse items from chat using active primary account & accounts config
+        const effectiveConfig = await getEffectiveAccountsConfig();
+        const activePrimary = effectiveConfig.primaryAccount || 'BSI';
+
+        const parsedItems = parseWhatsAppMessage(text.trim(), {
+          primaryAccount: activePrimary,
+          accounts: effectiveConfig.accounts || []
+        });
 
         if (parsedItems.length > 0) {
           const senderLabel = msg.pushName || msg.key.remoteJid;
-          console.log(`📥 [WhatsApp] Menerima ${parsedItems.length} transaksi dari: ${senderLabel}`);
+          console.log(`📥 [WhatsApp] Menerima ${parsedItems.length} transaksi dari: ${senderLabel} (Rek Utama: ${activePrimary})`);
 
           // 1. Direct Save to Supabase (Instant Realtime Broadcast to All Devices)
           let supabaseSuccess = false;
@@ -292,8 +428,8 @@ async function startWhatsAppBot() {
                 category: item.category,
                 date: item.date,
                 time: item.time || '',
-                payment_method: item.paymentMethod || 'BSI',
-                notes: item.notes || `Input otomatis via WhatsApp Bot (${item.paymentMethod || 'BSI'})`,
+                payment_method: item.paymentMethod || activePrimary,
+                notes: item.notes || `Input otomatis via WhatsApp Bot (${item.paymentMethod || activePrimary})`,
                 source: 'whatsapp',
                 created_at: item.createdAt || new Date().toISOString()
               }));
@@ -402,9 +538,31 @@ app.get('/api/status', (req, res) => {
     qrDataUrl: currentQRDataUrl,
     supabaseConfigured: Boolean(cfg.url && cfg.anonKey),
     supabaseUrl: cfg.url || '',
+    primaryAccount: cachedAccountsConfig.primaryAccount || 'BSI',
+    accounts: cachedAccountsConfig.accounts || [],
     uptime: Math.floor(process.uptime()),
     pid: process.pid
   });
+});
+
+app.get('/api/accounts', async (req, res) => {
+  const cfg = await getEffectiveAccountsConfig();
+  res.json({ ok: true, data: cfg });
+});
+
+app.post('/api/accounts/primary', async (req, res) => {
+  const { primaryAccount } = req.body;
+  if (!primaryAccount) return res.status(400).json({ ok: false, error: 'primaryAccount diperlukan' });
+  cachedAccountsConfig.primaryAccount = primaryAccount;
+  if (Array.isArray(cachedAccountsConfig.accounts)) {
+    cachedAccountsConfig.accounts = cachedAccountsConfig.accounts.map(a => ({
+      ...a,
+      isPrimary: a.name.toLowerCase() === primaryAccount.toLowerCase()
+    }));
+  }
+  saveLocalAccountsConfig(cachedAccountsConfig);
+  console.log(`🏦 [API] Rekening utama diperbarui via endpoint: ${primaryAccount}`);
+  res.json({ ok: true, data: cachedAccountsConfig });
 });
 
 app.post('/api/config', (req, res) => {
@@ -525,6 +683,9 @@ function renderDashboardHtml() {
         <h1>WhatsApp Bot Server Hub</h1>
         <div id="statusBadge" class="status-badge ${botStatus === 'connected' ? 'connected' : botStatus === 'qr' ? 'qr' : 'offline'}">
           ${botStatus === 'connected' ? `🟢 WhatsApp Terhubung (${botNumber || 'Aktif'})` : botStatus === 'qr' ? '🟡 Menunggu Scan QR WhatsApp' : '⚪ Menghubungkan...'}
+        </div>
+        <div style="margin-top: 0.5rem; font-size: 0.82rem; color: #38bdf8; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); padding: 0.35rem 0.8rem; border-radius: 9999px; display: inline-flex; align-items: center; gap: 0.35rem;">
+          🏦 Rekening Utama: <strong>${cachedAccountsConfig.primaryAccount || 'BSI'}</strong>
         </div>
       </div>
 

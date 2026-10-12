@@ -30,10 +30,10 @@ export const DEFAULT_CATEGORIES = [
 ];
 
 export const DEFAULT_PAYMENT_METHODS = [
-  { id: 'bca', name: 'BCA', icon: 'CreditCard', color: '#0060AF', isPrimary: true },
-  { id: 'bni', name: 'BNI', icon: 'CreditCard', color: '#F15A24', isPrimary: false },
+  { id: 'bsi', name: 'BSI', icon: 'CreditCard', color: '#0060AF', isPrimary: true },
+  { id: 'bca', name: 'BCA', icon: 'CreditCard', color: '#0060AF', isPrimary: false },
   { id: 'seabank', name: 'SeaBank', icon: 'CreditCard', color: '#0060AF', isPrimary: false },
-  { id: 'bsi', name: 'BSI', icon: 'CreditCard', color: '#0060AF', isPrimary: false },
+  { id: 'bni', name: 'BNI', icon: 'CreditCard', color: '#F15A24', isPrimary: false },
 ];
 
 export function getCustomPaymentMethods() {
@@ -73,6 +73,18 @@ export function saveCustomPaymentMethods(methods) {
         srv.savePaymentMethodsToSupabase(list);
       }
     }).catch(() => {});
+  } catch {}
+
+  // Also notify local WhatsApp bot server if running
+  try {
+    const primary = list.find(m => m.isPrimary);
+    if (primary) {
+      fetch('http://localhost:5051/api/accounts/primary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ primaryAccount: primary.name })
+      }).catch(() => {});
+    }
   } catch {}
 }
 

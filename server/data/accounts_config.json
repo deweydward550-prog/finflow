@@ -2,24 +2,40 @@
   "primaryAccount": "BSI",
   "accounts": [
     {
+      "id": "bsi",
+      "name": "BSI",
+      "icon": "CreditCard",
+      "color": "#0060AF",
+      "isPrimary": true,
+      "initialBalance": 500000,
+      "storedBalance": 8767239
+    },
+    {
       "id": "bca",
       "name": "BCA",
-      "isPrimary": false
+      "icon": "CreditCard",
+      "color": "#0060AF",
+      "isPrimary": false,
+      "initialBalance": 3500000,
+      "storedBalance": 4000000
     },
     {
       "id": "bni",
       "name": "BNI",
-      "isPrimary": false
+      "icon": "CreditCard",
+      "color": "#F15A24",
+      "isPrimary": false,
+      "initialBalance": 0,
+      "storedBalance": 0
     },
     {
       "id": "seabank",
       "name": "SeaBank",
-      "isPrimary": false
-    },
-    {
-      "id": "bsi",
-      "name": "BSI",
-      "isPrimary": true
+      "icon": "CreditCard",
+      "color": "#0060AF",
+      "isPrimary": false,
+      "initialBalance": 7951449,
+      "storedBalance": 7951449
     }
   ]
 }

@@ -25,7 +25,7 @@ export default function MonthlyQuests({
   const [incomeAmount, setIncomeAmount] = useState('');
   const [incomeTitle, setIncomeTitle] = useState('Gaji Pokok Bulanan');
   const [paymentMethodsList, setPaymentMethodsList] = useState(() => getCustomPaymentMethods());
-  const [incomeMethod, setIncomeMethod] = useState(() => getPrimaryPaymentMethod()?.name || 'BCA');
+  const [incomeMethod, setIncomeMethod] = useState(() => getPrimaryPaymentMethod()?.name || 'BSI');
   const [isSubmittingIncome, setIsSubmittingIncome] = useState(false);
   const [showIncomeDetails, setShowIncomeDetails] = useState(false);
 

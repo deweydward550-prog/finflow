@@ -78,13 +78,13 @@ export const KNOWN_ACCOUNT_ALIASES = {
 /**
  * Resolves account token into registered account or fallback to Primary Account
  */
-export function resolvePaymentMethod(accountToken, availableAccounts = [], defaultPrimary = 'BCA') {
+export function resolvePaymentMethod(accountToken, availableAccounts = [], defaultPrimary = 'BSI') {
   if (!accountToken || !accountToken.trim()) {
     if (Array.isArray(availableAccounts) && availableAccounts.length > 0) {
       const primary = availableAccounts.find(a => a.isPrimary) || availableAccounts[0];
       if (primary && primary.name) return primary.name;
     }
-    return defaultPrimary || 'BCA';
+    return defaultPrimary || 'BSI';
   }
 
   const token = accountToken.trim().toLowerCase();
@@ -200,13 +200,13 @@ export function parseSingleItem(rawSegment, options = {}) {
   if (!text) return null;
 
   // Options normalization
-  let primaryAccount = 'BCA';
+  let primaryAccount = 'BSI';
   let availableAccounts = [];
 
   if (typeof options === 'string') {
     primaryAccount = options;
   } else if (typeof options === 'object' && options !== null) {
-    primaryAccount = options.primaryAccount || options.defaultPaymentMethod || 'BCA';
+    primaryAccount = options.primaryAccount || options.defaultPaymentMethod || 'BSI';
     availableAccounts = options.accounts || options.availableAccounts || [];
   }
 

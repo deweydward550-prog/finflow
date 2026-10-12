@@ -4,7 +4,7 @@ import {
   CreditCard, Banknote, ShieldCheck, ChevronRight
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { PAYMENT_METHODS } from '../db/db';
+import { getCustomPaymentMethods, getPrimaryPaymentMethod } from '../db/db';
 import { formatRupiah, formatMonthYear, getCategoryIcon } from '../utils/formatters';
 
 export default function NewMonthIncomeModal({
@@ -22,7 +22,7 @@ export default function NewMonthIncomeModal({
   const [step, setStep] = useState(1);
   const [amount, setAmount] = useState('8500000');
   const [title, setTitle] = useState('Gaji Pokok Bulanan');
-  const [paymentMethod, setPaymentMethod] = useState('BCA');
+  const [paymentMethod, setPaymentMethod] = useState(() => getPrimaryPaymentMethod()?.name || 'BSI');
   const [error, setError] = useState('');
   const [recordedIncomeAmount, setRecordedIncomeAmount] = useState(0);
 
@@ -148,7 +148,7 @@ export default function NewMonthIncomeModal({
             <div className="input-group">
               <label className="input-label">Diterima di Rekening / Dompet</label>
               <div className="method-chips-scroll">
-                {PAYMENT_METHODS.map(m => (
+                {getCustomPaymentMethods().map(m => (
                   <button 
                     key={m.id}
                     type="button"
