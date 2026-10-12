@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, Plus, Trash2, Edit2, Edit3, Layers, Info, 
-  ChevronDown, CreditCard, Banknote, Smartphone, Wallet, Star
+  ChevronDown, CreditCard, Banknote, Smartphone, Wallet, Star,
+  ArrowUpRight, ArrowDownRight, Activity, Sparkles
 } from 'lucide-react';
 import { 
   formatRupiah, formatDateID, getRelativeDayLabel, 
@@ -109,12 +110,15 @@ export default function DailyExpenses({
         let totalExpUpToMonth = 0;
         let currentMonthInc = 0;
         let currentMonthExp = 0;
+        let priorMonthInc = 0;
+        let priorMonthExp = 0;
 
         (allTransactions || []).forEach(t => {
           if (!t.date) return;
           const monthPrefix = t.date.slice(0, 7);
           const isUpToMonth = monthPrefix <= selectedMonthYear;
           const isCurrentMonth = monthPrefix === selectedMonthYear;
+          const isPriorMonth = monthPrefix < selectedMonthYear;
 
           const sourceMethod = (t.paymentMethod || '').trim().toLowerCase();
           const targetMethod = (t.targetPaymentMethod || 
@@ -143,22 +147,36 @@ export default function DailyExpenses({
             if (isInflow) currentMonthInc += (t.amount || 0);
             if (isOutflow) currentMonthExp += (t.amount || 0);
           }
+
+          if (isPriorMonth) {
+            if (isInflow) priorMonthInc += (t.amount || 0);
+            if (isOutflow) priorMonthExp += (t.amount || 0);
+          }
         });
 
         const isEwallet = method.icon === 'Smartphone' || 
           ['gopay', 'ovo', 'dana', 'shopeepay', 'linkaja'].some(e => method.name.toLowerCase().includes(e));
 
-        // Calculate active rolling balance: (initial/stored baseline + total income up to month - total expense up to month)
+        // Baseline balance (saldo awal terdaftar)
         const baseInitial = method.initialBalance !== undefined 
           ? method.initialBalance 
           : 0;
 
+        // Saldo Sebelumnya (sebelum mutasi bulan berjalan):
+        const priorBalance = baseInitial + priorMonthInc - priorMonthExp;
+
+        // Saldo Terkini / Realtime (hingga bulan berjalan):
         const finalBalance = baseInitial + totalIncUpToMonth - totalExpUpToMonth;
+
+        // Perubahan bersih bulan ini:
+        const netChange = currentMonthInc - currentMonthExp;
 
         return {
           ...method,
+          priorBalance,
           income: currentMonthInc,
           expense: currentMonthExp,
+          netChange,
           totalIncUpToMonth,
           totalExpUpToMonth,
           balance: finalBalance,
@@ -167,6 +185,29 @@ export default function DailyExpenses({
       })
       .sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
   }, [paymentMethodsList, allTransactions, selectedMonthYear]);
+
+  // Aggregate Vault summary totals across all accounts
+  const vaultTotals = useMemo(() => {
+    let totalPrior = 0;
+    let totalInc = 0;
+    let totalExp = 0;
+    let totalLive = 0;
+
+    accountBalances.forEach(acc => {
+      totalPrior += (acc.priorBalance || 0);
+      totalInc += (acc.income || 0);
+      totalExp += (acc.expense || 0);
+      totalLive += (acc.balance || 0);
+    });
+
+    return {
+      totalPrior,
+      totalInc,
+      totalExp,
+      totalLive,
+      netChange: totalInc - totalExp
+    };
+  }, [accountBalances]);
 
   // Handle saving new stored balances from Edit Modal
   const handleSaveAccountBalances = (updatedMethods) => {
@@ -262,63 +303,159 @@ export default function DailyExpenses({
           )}
         </div>
 
-        {/* Dropdown Information Panel */}
+        {/* Dropdown Information Panel - Window Game HUD Aesthetic */}
         {showAccountBreakdown && (
-          <div className="zen-hero-dropdown-panel">
-            <div className="zen-dropdown-header">
-              <span className="zen-dropdown-title">
-                Saldo & Arus Kas per Rekening ({formatMonthYear(selectedMonthYear)})
-              </span>
+          <div className="game-hud-window-panel">
+            {/* 1. Game Window Titlebar */}
+            <div className="game-hud-titlebar">
+              <div className="game-hud-title-left">
+                <span className="game-hud-live-badge">
+                  <span className="game-live-pulse-dot"></span>
+                  LIVE HUD
+                </span>
+                <span className="game-hud-main-title">
+                  VAULT REKENING & ARUS KAS
+                </span>
+                <span className="game-hud-period-tag">
+                  {formatMonthYear(selectedMonthYear)}
+                </span>
+              </div>
               
-              {/* Clean Icon-Only Edit Button in Top Right */}
-              <button
-                type="button"
-                className="zen-dropdown-edit-icon-btn"
-                onClick={() => setIsEditBalancesOpen(true)}
-                title="Ubah Nominal Saldo Rekening"
-                aria-label="Ubah Nominal Saldo Rekening"
-              >
-                <Edit3 size={15} />
-              </button>
+              <div className="game-hud-actions">
+                <button
+                  type="button"
+                  className="game-hud-action-btn"
+                  onClick={() => setIsEditBalancesOpen(true)}
+                  title="Ubah Nominal Baseline / Saldo Awal Rekening"
+                >
+                  <Edit3 size={13} />
+                  <span>Atur Saldo Awal</span>
+                </button>
+              </div>
             </div>
 
-            {priorBalance !== 0 && (
-              <div className="zen-rollover-info-bar">
-                <span>Saldo Bawaan Bulan Lalu:</span>
-                <strong>{priorBalance >= 0 ? '+' : ''}{formatRupiah(priorBalance)}</strong>
+            {/* 2. Global Game Vault Equation Strip (Total Awal + Masuk - Keluar = Total Live) */}
+            <div className="game-vault-summary-strip">
+              <div className="vault-eq-col">
+                <span className="vault-eq-label">SALDO AWAL TOTAL</span>
+                <span className="vault-eq-val">{formatRupiah(vaultTotals.totalPrior)}</span>
               </div>
-            )}
 
-            <div className="zen-accounts-grid">
-              {accountBalances.map(acc => (
-                <div key={acc.id} className={`zen-account-card ${acc.isPrimary ? 'is-primary-card' : ''}`}>
-                  <div className="zen-account-card-left">
-                    <div className="zen-account-card-icon" style={{ color: acc.color || '#0060AF' }}>
-                      {acc.isCash ? <Banknote size={15} /> : acc.isEwallet ? <Smartphone size={15} /> : <CreditCard size={15} />}
-                    </div>
-                    <div className="zen-account-card-name-wrap">
-                      <div className="zen-account-name-row">
-                        <span className="zen-account-card-name">{acc.name}</span>
-                        {acc.isPrimary && (
-                          <span className="zen-card-primary-tag" title="Rekening Utama">
-                            <Star size={9} fill="currentColor" /> Utama
+              <span className="vault-eq-sign">+</span>
+
+              <div className="vault-eq-col col-inc">
+                <span className="vault-eq-label text-inc">TOTAL MASUK (+)</span>
+                <span className="vault-eq-val text-inc">+{formatRupiah(vaultTotals.totalInc, false)}</span>
+              </div>
+
+              <span className="vault-eq-sign">-</span>
+
+              <div className="vault-eq-col col-exp">
+                <span className="vault-eq-label text-exp">TOTAL KELUAR (-)</span>
+                <span className="vault-eq-val text-exp">-{formatRupiah(vaultTotals.totalExp, false)}</span>
+              </div>
+
+              <span className="vault-eq-sign sign-arrow">➔</span>
+
+              <div className="vault-eq-col col-live">
+                <span className="vault-eq-label text-highlight">SALDO TERKINI (LIVE)</span>
+                <span className="vault-eq-val text-highlight">{formatRupiah(vaultTotals.totalLive)}</span>
+              </div>
+            </div>
+
+            {/* 3. Game Accounts Grid */}
+            <div className="game-accounts-grid">
+              {accountBalances.map(acc => {
+                const isNetPos = acc.netChange > 0;
+                const isNetNeg = acc.netChange < 0;
+
+                return (
+                  <div 
+                    key={acc.id} 
+                    className={`game-account-card ${acc.isPrimary ? 'is-primary-slot' : ''}`}
+                    style={{ '--slot-accent': acc.color || '#0060AF' }}
+                  >
+                    {/* Card Header */}
+                    <div className="game-card-header">
+                      <div className="game-card-identity">
+                        <div 
+                          className="game-card-icon-frame" 
+                          style={{ 
+                            color: acc.color || '#0060AF', 
+                            borderColor: `${acc.color || '#0060AF'}40`, 
+                            background: `${acc.color || '#0060AF'}12` 
+                          }}
+                        >
+                          {acc.isCash ? <Banknote size={15} /> : acc.isEwallet ? <Smartphone size={15} /> : <CreditCard size={15} />}
+                        </div>
+                        <div className="game-card-titles">
+                          <div className="game-card-name-row">
+                            <span className="game-card-name">{acc.name}</span>
+                            {acc.isPrimary && (
+                              <span className="game-card-rank-tag" title="Rekening Utama Sistem FinFlow">
+                                <Star size={9} fill="currentColor" /> UTAMA
+                              </span>
+                            )}
+                          </div>
+                          {acc.number && <span className="game-card-account-num">{acc.number}</span>}
+                        </div>
+                      </div>
+
+                      <div className="game-card-status-badge">
+                        {isNetPos ? (
+                          <span className="net-flow-badge badge-inc" title="Arus kas surplus bulan ini">
+                            <ArrowUpRight size={11} /> +{formatRupiah(acc.netChange, false)}
+                          </span>
+                        ) : isNetNeg ? (
+                          <span className="net-flow-badge badge-exp" title="Arus kas defisit bulan ini">
+                            <ArrowDownRight size={11} /> -{formatRupiah(Math.abs(acc.netChange), false)}
+                          </span>
+                        ) : (
+                          <span className="net-flow-badge badge-neutral" title="Tidak ada mutasi kas bulan ini">
+                            ▬ Tetap
                           </span>
                         )}
                       </div>
-                      {acc.number && <span className="zen-account-card-num">{acc.number}</span>}
+                    </div>
+
+                    {/* Core Live Balance Section */}
+                    <div className="game-card-live-section">
+                      <div className="game-card-live-label">
+                        <span className="game-card-live-dot"></span>
+                        SALDO REALTIME (TERKINI)
+                      </div>
+                      <div className={`game-card-live-balance ${acc.balance >= 0 ? 'text-inc' : 'text-exp'}`}>
+                        {acc.balance >= 0 ? '+' : ''}{formatRupiah(acc.balance)}
+                      </div>
+                    </div>
+
+                    {/* Audit Flow Equation Track */}
+                    <div className="game-card-equation-track">
+                      {/* Saldo Sebelumnya */}
+                      <div className="eq-cell cell-prior" title="Saldo awal sebelum mutasi bulan ini">
+                        <span className="eq-cell-sub">Saldo Awal</span>
+                        <span className="eq-cell-val">{formatRupiah(acc.priorBalance, false)}</span>
+                      </div>
+
+                      <span className="eq-track-math">+</span>
+
+                      {/* Masuk (+) */}
+                      <div className="eq-cell cell-inc" title="Total pemasukan & transfer masuk">
+                        <span className="eq-cell-sub text-inc">Masuk (+)</span>
+                        <span className="eq-cell-val text-inc">+{formatRupiah(acc.income, false)}</span>
+                      </div>
+
+                      <span className="eq-track-math">-</span>
+
+                      {/* Keluar (-) */}
+                      <div className="eq-cell cell-exp" title="Total pengeluaran & transfer keluar">
+                        <span className="eq-cell-sub text-exp">Keluar (-)</span>
+                        <span className="eq-cell-val text-exp">-{formatRupiah(acc.expense, false)}</span>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="zen-account-card-right">
-                    <span className={`zen-account-card-balance ${acc.balance > 0 ? 'text-inc' : ''}`}>
-                      {acc.balance > 0 ? '+' : ''}{formatRupiah(acc.balance)}
-                    </span>
-                    <span className="zen-account-card-flow">
-                      +{formatRupiah(acc.income, false)} / -{formatRupiah(acc.expense, false)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
